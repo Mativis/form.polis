@@ -1,11 +1,14 @@
 <!DOCTYPE html>
-<html lang="pt-br" data-theme="light"> {# Default theme set here, JS will override #}
+<html lang="pt-br" data-theme="light"> {# O tema padrão é definido aqui, o JS pode substituir #}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Pólis{% endblock %} - Sistema de Gestão</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    {# Font Awesome para ícones #}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" xintegrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    {# Folha de estilos principal da aplicação #}
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {# Bloco para estilos extra específicos da página #}
     {% block head_extra %}{% endblock %}
 </head>
 <body>
@@ -16,6 +19,7 @@
     <nav class="main-nav">
         <div class="main-nav-links">
             {% if current_user.is_authenticated %}
+                {# Links para utilizadores autenticados #}
                 <a href="{{ url_for('home') }}" class="{{ 'active' if request.endpoint == 'home' else '' }}"><i class="fas fa-home"></i> Home</a>
                 <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' else '' }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
                 <a href="{{ url_for('inserir_dados') }}" class="{{ 'active' if request.endpoint == 'inserir_dados' else '' }}"><i class="fas fa-file-upload"></i> Inserir Dados</a>
@@ -23,10 +27,13 @@
                 <a href="{{ url_for('relatorio_pendentes') }}" class="{{ 'active' if request.endpoint == 'relatorio_pendentes' else '' }}"><i class="fas fa-clipboard-list"></i> Rel. Pendentes</a>
                 <a href="{{ url_for('change_password') }}" class="{{ 'active' if request.endpoint == 'change_password' else '' }}"><i class="fas fa-user-shield"></i> Alterar Senha</a>
 
+                {# Links específicos para administradores #}
                 {% if current_user.username in ADMIN_USERNAMES %}
-                    <a href="{{ url_for('add_user_admin') }}" class="{{ 'active' if request.endpoint == 'add_user_admin' else '' }}"><i class="fas fa-user-plus"></i> Adicionar Usuário</a>
+                    <a href="{{ url_for('add_user_admin') }}" class="{{ 'active' if request.endpoint == 'add_user_admin' else '' }}"><i class="fas fa-user-plus"></i> Adicionar Utilizador</a>
+                    <a href="{{ url_for('view_audit_log') }}" class="{{ 'active' if request.endpoint == 'view_audit_log' else '' }}"><i class="fas fa-history"></i> Log de Auditoria</a> {# NOVO LINK #}
                 {% endif %}
             {% else %}
+                {# Link para utilizadores não autenticados #}
                 <a href="{{ url_for('login') }}" class="{{ 'active' if request.endpoint == 'login' else '' }}"><i class="fas fa-sign-in-alt"></i> Login</a>
             {% endif %}
         </div>
@@ -37,15 +44,19 @@
                  <a href="{{ url_for('logout') }}" class="logout-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </div>
             {% endif %}
+            {# Botão para alternar o tema claro/escuro #}
             <button id="theme-toggle" class="theme-toggle-btn" title="Alternar tema">
-                <i class="fas fa-moon"></i>
-                <i class="fas fa-sun"></i>
+                <i class="fas fa-moon"></i> {# Ícone para tema escuro #}
+                <i class="fas fa-sun"></i>  {# Ícone para tema claro #}
             </button>
         </div>
     </nav>
 
     <main class="container">
+        {# Bloco para mensagens antes das flash messages, se necessário #}
         {% block before_flash_messages %}{% endblock %}
+        
+        {# Exibição de flash messages (sucesso, erro, aviso, info) #}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <ul class="flash-messages">
@@ -56,6 +67,7 @@
             {% endif %}
         {% endwith %}
         
+        {# Bloco principal de conteúdo da página #}
         {% block content %}{% endblock %}
     </main>
 
@@ -63,26 +75,31 @@
         <p>&copy; {{ current_year }} Pólis. Todos os direitos reservados.</p>
     </footer>
 
+    {# Script para alternância de tema #}
     <script>
         (function() {
             const themeToggle = document.getElementById('theme-toggle');
-            const htmlEl = document.documentElement; 
+            const htmlEl = document.documentElement; // O elemento <html>
 
+            // Função para definir o tema e guardá-lo no localStorage
             function setTheme(theme) {
                 htmlEl.setAttribute('data-theme', theme);
-                localStorage.setItem('polisTheme', theme);
+                localStorage.setItem('polisTheme', theme); // Guarda a preferência
             }
 
+            // Verifica se há um tema guardado no localStorage
             let initialTheme = localStorage.getItem('polisTheme');
             if (!initialTheme) {
+                // Se não houver, verifica a preferência do sistema operativo
                 if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
                     initialTheme = 'dark';
                 } else {
-                    initialTheme = 'light'; 
+                    initialTheme = 'light'; // Padrão para claro
                 }
             }
-            setTheme(initialTheme);
+            setTheme(initialTheme); // Aplica o tema inicial
 
+            // Event listener para o botão de alternância
             if (themeToggle) {
                 themeToggle.addEventListener('click', () => {
                     const currentTheme = htmlEl.getAttribute('data-theme');
@@ -92,6 +109,7 @@
             }
         })();
     </script>
+    {# Bloco para scripts extra específicos da página #}
     {% block scripts_extra %}{% endblock %}
 </body>
 </html>

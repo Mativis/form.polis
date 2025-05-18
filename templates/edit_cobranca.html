@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Cobrança{% endblock %}
+
+{% block content %}
+<h2 class="page-title"><i class="fas fa-edit"></i> Editar Cobrança (ID: {{ cobranca.id }})</h2>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Detalhes da Cobrança</h3>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('edit_cobranca', cobranca_id=cobranca.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="pedido">Pedido:</label>
+                    <input type="text" id="pedido" name="pedido" class="form-control" value="{{ request.form.pedido or cobranca.pedido }}" required>
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="os">OS (Ordem de Serviço):</label>
+                    <input type="text" id="os" name="os" class="form-control" value="{{ request.form.os or cobranca.os }}" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="filial">Filial:</label>
+                    <input type="text" id="filial" name="filial" class="form-control" value="{{ request.form.filial or cobranca.filial }}">
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="placa">Placa:</label>
+                    <input type="text" id="placa" name="placa" class="form-control" value="{{ request.form.placa or cobranca.placa }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="transportadora">Transportadora:</label>
+                <input type="text" id="transportadora" name="transportadora" class="form-control" value="{{ request.form.transportadora or cobranca.transportadora }}">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="conformidade">Conformidade:</label>
+                    {# Poderia ser um select se os valores forem fixos #}
+                    <input type="text" id="conformidade" name="conformidade" class="form-control" value="{{ request.form.conformidade or cobranca.conformidade }}">
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="status">Status:</label>
+                    {# Poderia ser um select se os valores forem fixos e conhecidos #}
+                    <input type="text" id="status" name="status" class="form-control" value="{{ request.form.status or cobranca.status }}">
+                </div>
+            </div>
+
+            <div class="form-group mt-4">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar Alterações</button>
+                <a href="{{ url_for('relatorio_cobrancas') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block head_extra %}
+{{ super() }}
+<style>
+    .form-row {
+        display: flex;
+        flex-wrap: wrap;
+        margin-right: -5px;
+        margin-left: -5px;
+    }
+    .form-row > .col-md-6 {
+        padding-right: 5px;
+        padding-left: 5px;
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+    /* Para ecrãs mais pequenos, fazer os campos ocuparem a largura total */
+    @media (max-width: 768px) {
+        .form-row > .col-md-6 {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+    }
+</style>
+{% endblock %}

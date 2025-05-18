@@ -44,11 +44,11 @@
                 </div>
                 <div class="form-group">
                     <label for="filtro_valor_min">Valor Mín.:</label>
-                    <input type="number" step="0.01" name="filtro_valor_min" id="filtro_valor_min" value="{{ filtros.valor_min or '' }}" class="form-control form-control-sm">
+                    <input type="text" name="filtro_valor_min" id="filtro_valor_min" value="{{ filtros.valor_min or '' }}" class="form-control form-control-sm" placeholder="Ex: 100,00">
                 </div>
                 <div class="form-group">
                     <label for="filtro_valor_max">Valor Máx.:</label>
-                    <input type="number" step="0.01" name="filtro_valor_max" id="filtro_valor_max" value="{{ filtros.valor_max or '' }}" class="form-control form-control-sm">
+                    <input type="text" name="filtro_valor_max" id="filtro_valor_max" value="{{ filtros.valor_max or '' }}" class="form-control form-control-sm" placeholder="Ex: 500,00">
                 </div>
                 <div class="form-group-actions">
                     <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Filtrar</button>
@@ -71,6 +71,7 @@
                         <th class="col-valor">Valor</th>
                         <th class="col-status">Status</th>
                         <th class="col-date">Importado em</th>
+                        <th class="col-actions text-center">Ações</th> {# NOVA COLUNA #}
                     </tr>
                 </thead>
                 <tbody>
@@ -82,11 +83,22 @@
                         <td>{{ pendencia.filial | default('N/A') }}</td>
                         <td class="cell-valor">{{ pendencia.valor | format_currency }}</td>
                         <td class="cell-status">
-                            <span class="badge status-{{ pendencia.status | lower | replace(' ', '-') | default('desconhecido') }}">
+                            <span class="badge status-{{ pendencia.status | lower | replace(' ', '-') | default('desconhecido') | normalize_css }}">
                                 {{ pendencia.status | default('N/A') }}
                             </span>
                         </td>
                         <td class="cell-date">{{ pendencia.data_importacao_fmt | default('N/A') }}</td>
+                        <td class="cell-actions text-center"> {# NOVOS BOTÕES #}
+                            <a href="{{ url_for('edit_pendencia', pendencia_id=pendencia.id) }}" class="btn btn-sm btn-info" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('delete_pendencia_route', pendencia_id=pendencia.id) }}" style="display: inline-block;" onsubmit="return confirm('Tem a certeza que deseja apagar esta pendência? Esta ação não pode ser desfeita.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-danger" title="Apagar">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </form>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -95,7 +107,7 @@
         <div class="card no-data-message">
             <div class="card-body">
                 <i class="fas fa-folder-open"></i>
-                Nenhuma pendência encontrada com os filtros aplicados ou não há pendências registradas.
+                Nenhuma pendência encontrada com os filtros aplicados ou não há pendências registadas.
             </div>
         </div>
         {% endif %}
@@ -103,23 +115,26 @@
 {% endblock %}
 
 {% block scripts_extra %}
+{{ super() }}
 <script>
 function imprimirRelatorioPendentes() {
     const form = document.getElementById('pendentesFilterForm');
     const params = new URLSearchParams(new FormData(form));
-    // Remove parâmetros vazios para não poluir a URL do PDF
     const cleanParams = new URLSearchParams();
-    for (const [key, value] of params) { // Usar params diretamente
-        if (value && value.trim() !== '') { // Verifica se o valor não é apenas espaços em branco
+    for (const [key, value] of params) {
+        if (value && value.trim() !== '') {
             cleanParams.append(key, value);
         }
     }
+    // Adicionar um timestamp para evitar cache do PDF no browser, se necessário
+    // cleanParams.append('_t', new Date().getTime());
     window.open("{{ url_for('imprimir_relatorio_pendentes') }}?" + cleanParams.toString(), '_blank');
 }
 </script>
 {% endblock %}
 
 {% block head_extra %}
+{{ super() }}
 <style>
     .form-control-sm {
         padding: 0.3rem 0.6rem;
@@ -127,10 +142,16 @@ function imprimirRelatorioPendentes() {
         height: calc(1.5em + .3rem + 2px);
     }
     .btn-sm {
-        padding: 0.3rem 0.6rem;
-        font-size: 0.875rem;
+        padding: 0.25rem 0.5rem; /* Ajustado para botões de ação */
+        font-size: 0.75rem; /* Ajustado para botões de ação */
+        line-height: 1.5;
     }
-    /* Classes de estilo para colunas específicas já existem em style.css */
-    /* .table th.col-valor, .table td.cell-valor ... */
+    .col-actions {
+        width: 100px; /* Ajustar conforme necessário */
+        white-space: nowrap;
+    }
+     .cell-actions .btn {
+        margin: 0 2px; /* Pequeno espaçamento entre botões */
+    }
 </style>
 {% endblock %}

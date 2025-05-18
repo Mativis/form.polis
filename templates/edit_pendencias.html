@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Pendência{% endblock %}
+
+{% block content %}
+<h2 class="page-title"><i class="fas fa-edit"></i> Editar Pendência (ID: {{ pendencia.id }})</h2>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Detalhes da Pendência</h3>
+    </div>
+    <div class="card-body">
+        {# Usar form_data para persistir valores do formulário em caso de erro de validação no backend #}
+        {% set current_form_data = form_data if form_data else pendencia %}
+        <form method="POST" action="{{ url_for('edit_pendencia', pendencia_id=pendencia.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+            <div class="form-group">
+                <label for="pedido_ref">Pedido de Referência (ID do ficheiro):</label>
+                <input type="text" id="pedido_ref" name="pedido_ref" class="form-control" value="{{ current_form_data.pedido_ref }}" required>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="fornecedor">Fornecedor:</label>
+                    <input type="text" id="fornecedor" name="fornecedor" class="form-control" value="{{ current_form_data.fornecedor }}">
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="filial">Filial:</label>
+                    <input type="text" id="filial" name="filial" class="form-control" value="{{ current_form_data.filial }}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="valor">Valor (R$):</label>
+                    {# O valor é formatado para exibição no input, mas deve ser enviado como número #}
+                    <input type="text" id="valor" name="valor" class="form-control" value="{{ current_form_data.valor | format_currency | replace('R$ ', '') }}" placeholder="Ex: 123,45" required>
+                     <small class="form-text text-muted">Use vírgula como separador decimal (ex: 123,45).</small>
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="status">Status:</label>
+                    {# Idealmente, este seria um <select> com os status possíveis #}
+                    <select id="status" name="status" class="form-control">
+                        <option value="Pendente" {% if current_form_data.status == 'Pendente' %}selected{% endif %}>Pendente</option>
+                        <option value="Finalizado" {% if current_form_data.status == 'Finalizado' %}selected{% endif %}>Finalizado</option>
+                        <option value="Cancelado" {% if current_form_data.status == 'Cancelado' %}selected{% endif %}>Cancelado</option>
+                        {# Adicionar outros status conforme necessário #}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group mt-4">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar Alterações</button>
+                <a href="{{ url_for('relatorio_pendentes') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block head_extra %}
+{{ super() }}
+<style>
+    .form-row {
+        display: flex;
+        flex-wrap: wrap;
+        margin-right: -5px;
+        margin-left: -5px;
+    }
+    .form-row > .col-md-6 {
+        padding-right: 5px;
+        padding-left: 5px;
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+    @media (max-width: 768px) {
+        .form-row > .col-md-6 {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+    }
+</style>
+{% endblock %}
