@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Inserir Dados{% endblock %}
+
+{% block content %}
+    <h2 class="page-title"><i class="fas fa-file-import"></i> Importar Dados de Planilhas</h2>
+    
+    <div class="card" id="cobrancas_section">
+        <div class="card-header">
+            <h3><i class="fas fa-file-invoice-dollar"></i> 1. Importar Dados de Cobranças</h3>
+        </div>
+        <div class="card-body">
+            <p>
+                Para importar dados de cobranças, seu arquivo Excel deve conter uma planilha nomeada como <strong>Cobrancas</strong>.
+                Para arquivos CSV, o sistema tentará ler os dados diretamente.
+            </p>
+            <p class="mb-2"><strong>Colunas esperadas para Cobranças (o sistema tentará mapear variações):</strong></p>
+            <ul class="list-unstyled small text-muted">
+                <li><i class="fas fa-check-circle text-success mr-1"></i> <b>Pedido:</b> <code>PEDIDO_EXCEL, pedido, cod_pedido, nº_pedido, id_pedido</code> (Obrigatória)</li>
+                <li><i class="fas fa-check-circle text-success mr-1"></i> <b>OS:</b> <code>OS_EXCEL, os, ordem_servico, ordem_de_servico</code> (Obrigatória)</li>
+                <li><i class="fas fa-check-circle text-success mr-1"></i> <b>Filial:</b> <code>FILIAL_EXCEL, filial, cod_filial, loja</code> (Obrigatória)</li>
+                <li><i class="fas fa-check-circle text-success mr-1"></i> <b>Placa:</b> <code>PLACA_EXCEL, placa_veiculo, placa</code> (Obrigatória)</li>
+                <li><i class="fas fa-check-circle text-success mr-1"></i> <b>Transportadora:</b> <code>TRANSPORTADORA_EXCEL, transportadora, transp</code> (Obrigatória)</li>
+                <li><i class="fas fa-check-circle text-success mr-1"></i> <b>Conformidade:</b> <code>CONFORMIDADE_EXCEL, conformidade, conf</code> (Obrigatória)</li>
+                <li><i class="fas fa-check-circle text-success mr-1"></i> <b>Status:</b> <code>STATUS_EXCEL, status, situacao</code> (Obrigatória)</li>
+            </ul>
+            <p class="small"><em>Os nomes das colunas DEVEM ser reconhecíveis. O sistema normaliza os nomes (remove acentos, espaços, etc.) para o mapeamento. Todas as colunas listadas acima para Cobranças são consideradas obrigatórias pela lógica atual.</em></p>
+
+            <form method="POST" enctype="multipart/form-data" action="{{ url_for('inserir_dados') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="action_type" value="import_cobrancas">
+                <div class="form-group">
+                    <label for="excel_file_cobrancas">Selecione o arquivo Excel (.xlsx) ou CSV (.csv):</label>
+                    <input type="file" id="excel_file_cobrancas" name="excel_file_cobrancas" class="form-control" accept=".xlsx,.csv" required>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Importar Cobranças</button>
+            </form>
+        </div>
+    </div>
+
+    <hr class="my-4" style="border-top: 1px solid var(--card-border-color);">
+
+    <div class="card" id="pendentes_section">
+        <div class="card-header">
+            <h3><i class="fas fa-clipboard-list"></i> 2. Importar Dados de Pendências (Nova Estrutura)</h3>
+        </div>
+        <div class="card-body">
+            <p>
+                Para importar dados de pendências (nova estrutura), seu arquivo Excel deve conter uma planilha nomeada como <strong>Pendentes</strong> (ou será lida a primeira planilha do arquivo).
+                Para arquivos CSV, o sistema tentará ler os dados diretamente.
+            </p>
+            <p class="mb-2"><strong>Colunas esperadas para Pendências (nova estrutura):</strong></p>
+            <ul class="list-unstyled small text-muted">
+                <li><i class="fas fa-check-circle text-success mr-1"></i> <b>Pedido (ID do arquivo):</b> <code>id, pedido, pedido_id, codigo_pedido, pedido_ref</code> (Obrigatória)</li>
+                <li><i class="fas fa-check-circle text-success mr-1"></i> <b>Valor:</b> <code>valor, montante, total, custo_pendencia, valor_pedido</code> (Obrigatória, numérico)</li>
+                <li><i class="fas fa-info-circle text-info mr-1"></i> <b>Fornecedor:</b> <code>fornecedor, forncedor, vendor</code> (Opcional, default 'N/A')</li>
+                <li><i class="fas fa-info-circle text-info mr-1"></i> <b>Filial:</b> <code>filial, loja, unidade</code> (Opcional, default 'N/A')</li>
+                <li><i class="fas fa-info-circle text-info mr-1"></i> <b>Status:</b> <code>status, situacao, estado_pendencia</code> (Opcional, default 'Pendente'. Será sobrescrito pela lógica da 'Data de finalização', se aplicável.)</li>
+                <li><i class="fas fa-info-circle text-info mr-1"></i> <b>Data de finalização:</b> <code>data de finalizacao, data_finalizacao, dt_finalizacao, data_conclusao, data finalizacao</code> (Opcional. Se uma data válida for fornecida aqui, o 'Status' da pendência será 'Finalizado'. Se esta coluna estiver vazia e o 'Status' original do arquivo for 'Não finalizado', o 'Status' será 'Pendente'.)</li>
+            </ul>
+            <p class="small"><em>O sistema normaliza os nomes das colunas. Colunas marcadas como "Obrigatória" devem estar presentes. A importação de pendências ATUALMENTE SUBSTITUI todos os dados de pendências existentes.</em></p>
+
+            <form method="POST" enctype="multipart/form-data" action="{{ url_for('inserir_dados') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="action_type" value="import_pendentes">
+                <div class="form-group">
+                    <label for="excel_file_pendentes">Selecione o arquivo Excel (.xlsx) ou CSV (.csv):</label>
+                    <input type="file" id="excel_file_pendentes" name="excel_file_pendentes" class="form-control" accept=".xlsx,.csv" required>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Importar Pendências</button>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+    .list-unstyled .fas {
+        width: 1.2em; 
+    }
+</style>
+{% endblock %}

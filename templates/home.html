@@ -1,0 +1,84 @@
+<!-- home.html -->
+{% extends "base.html" %}
+
+{% block title %}Página Inicial{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2 class="page-title"><i class="fas fa-home"></i> Bem-vindo ao Sistema Pólis!</h2>
+</div>
+
+<div class="card welcome-card">
+    <div class="card-body">
+        <p>Este é o painel de controle do seu sistema de gestão de dados.</p>
+        <p>Utilize o menu de navegação para:</p>
+        
+        <ul class="feature-list">
+            <li class="feature-item">
+                <i class="fas fa-file-upload feature-icon"></i>
+                <div class="feature-content">
+                    <strong>Inserir Dados:</strong> Importar novas informações de cobranças e pendências
+                </div>
+            </li>
+            <li class="feature-item">
+                <i class="fas fa-file-invoice-dollar feature-icon"></i>
+                <div class="feature-content">
+                    <strong>Rel. Cobranças:</strong> Visualizar o relatório atualizado de cobranças
+                </div>
+            </li>
+            <li class="feature-item">
+                <i class="fas fa-clipboard-list feature-icon"></i>
+                <div class="feature-content">
+                    <strong>Rel. Pendentes:</strong> Acompanhar pendências e seus status
+                </div>
+            </li>
+            {% if current_user.username in ADMIN_USERNAMES %}
+            <li class="feature-item">
+                <i class="fas fa-user-plus feature-icon"></i>
+                <div class="feature-content">
+                    <strong>Adicionar Usuário:</strong> Gerenciar acesso de novos usuários
+                </div>
+            </li>
+            {% endif %}
+        </ul>
+        
+        <div class="welcome-footer">
+            <p>Se precisar de ajuda, consulte a documentação ou entre em contato com o suporte.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+    .welcome-card {
+        margin-top: 1.5rem;
+    }
+    
+    .feature-list {
+        list-style: none;
+        padding-left: 0;
+    }
+    
+    .feature-item {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--card-border-color);
+    }
+    
+    .feature-icon {
+        color: var(--link-color);
+        margin-right: 1rem;
+        font-size: 1.25rem;
+        width: 1.5em;
+        text-align: center;
+    }
+    
+    .welcome-footer {
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--card-border-color);
+    }
+</style>
+{% endblock %}

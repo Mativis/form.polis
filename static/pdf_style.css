@@ -1,0 +1,89 @@
+/* static/pdf_style.css */
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10pt; /* Base font size for PDF */
+    color: #333333;
+}
+
+h1 {
+    text-align: center;
+    color: #2c3e50;
+    border-bottom: 2px solid #1abc9c;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    font-size: 18pt;
+}
+.report-info {
+    margin-bottom: 20px;
+    font-size: 9pt;
+    color: #555;
+}
+.report-info p { margin: 2px 0; }
+.report-info strong { color: #333; }
+
+.filter-summary {
+    margin-bottom: 15px;
+    padding: 10px;
+    border: 1px solid #dddddd;
+    background-color: #f9f9f9;
+    font-size: 8pt;
+}
+.filter-summary h3 {
+    margin-top: 0;
+    margin-bottom: 5px;
+    font-size: 10pt;
+    color: #2c3e50;
+}
+.filter-summary ul { list-style: none; padding: 0; margin: 0; }
+.filter-summary li { margin-bottom: 3px; }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    font-size: 8pt; /* Smaller font in table for more data */
+}
+
+th, td {
+    border: 1px solid #cccccc;
+    padding: 4px 6px; /* Compact padding */
+    text-align: left;
+    word-wrap: break-word; /* Allow long text to wrap */
+}
+
+th {
+    background-color: #e9ecef;
+    font-weight: bold;
+    white-space: nowrap; /* Keep headers on one line if possible */
+}
+
+tr:nth-child(even) {
+    background-color: #f8f9f9;
+}
+
+.text-right {
+    text-align: right;
+}
+.no-data {
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+}
+
+/* Page numbering for WeasyPrint */
+@page {
+    size: A4 landscape; /* Or portrait if preferred */
+    margin: 1.5cm; /* Margins for the PDF page */
+
+    @bottom-right {
+        content: "Página " counter(page) " de " counter(pages);
+        font-size: 8pt;
+        color: #666666;
+    }
+}
+.footer-note {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 8pt;
+    color: #777;
+}
