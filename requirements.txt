@@ -1,0 +1,27 @@
+# Projeto Polis - requirements.txt
+
+# Framework Principal
+Flask>=2.0,<3.0  # Exemplo de pinning: Flask==2.2.3
+
+# Manipulação de Dados e Excel
+pandas>=1.3,<2.0    # Exemplo: pandas==1.5.3
+openpyxl>=3.0,<4.0 # Necessário para o pandas ler arquivos .xlsx. Exemplo: openpyxl==3.1.2
+
+# Segurança e Utilidades Web
+Werkzeug>=2.0,<3.0 # Para hashing de senhas e utilidades web. Exemplo: Werkzeug==2.2.3
+Flask-Login>=0.5,<0.7 # Exemplo: Flask-Login==0.6.2
+
+# Geração de PDF
+fpdf2>=2.7.0,<2.8.0 # Para geração de PDF. Exemplo: fpdf2==2.7.4
+
+# Timezones
+pytz>=2023.3,<2024.0 # Para manipulação de timezones. Exemplo: pytz==2023.3.post1
+
+# Para gerar este arquivo com versões exatas no seu ambiente:
+# 1. Crie e ative um ambiente virtual:
+#    python -m venv venv
+#    source venv/bin/activate  (Linux/macOS) ou venv\Scripts\activate (Windows)
+# 2. Instale as dependências:
+#    pip install Flask pandas openpyxl Werkzeug Flask-Login fpdf2 pytz
+# 3. Congele as versões:
+#    pip freeze > requirements.txt
