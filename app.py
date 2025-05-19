@@ -24,7 +24,6 @@ from utils.excel_processor import (
     get_pendencia_by_id,
     update_pendencia_db,
     delete_pendencia_db,
-    # Funções do Dashboard
     get_count_pedidos_status_especifico,
     get_placas_status_especifico,
     get_count_total_pedidos_lancados,
@@ -92,6 +91,21 @@ def admin_required(f):
             flash("Você não tem permissão para aceder a esta página.", "error"); return redirect(url_for('home'))
         return f(*args, **kwargs)
     return decorated_function
+
+def get_filters_as_text_list_for_pdf_pendentes(filtros_aplicados_form_dict):
+    lines = []
+    if filtros_aplicados_form_dict:
+        key_map_display = {
+            'pedido_ref': 'Pedido Ref.', 'fornecedor': 'Fornecedor',
+            'filial_pend': 'Filial', 'status_pend': 'Status',
+            'valor_min': 'Valor Mínimo', 'valor_max': 'Valor Máximo'
+        }
+        for key_form, value in filtros_aplicados_form_dict.items():
+            if value:
+                display_key = key_map_display.get(key_form, key_form.replace("_", " ").title())
+                value_display = format_currency_filter(value) if 'valor' in key_form else value
+                lines.append(f"{display_key}: {value_display}")
+    return lines
 
 # --- Log de Auditoria ---
 def log_audit(action: str, details: str = None):
@@ -428,15 +442,15 @@ class PDFReport(FPDF):
         self.set_left_margin(10); self.set_right_margin(10); self.set_auto_page_break(auto=True, margin=15) 
         self.font_name = 'Arial'; self.font_name_bold = 'Arial' 
         try:
-            font_dir = os.path.join(app.static_folder, 'fonts'); regular_font_path = os.path.join(font_dir, 'DejaVuSans.ttf')
+            font_dir = os.path.join(app.root_path, 'static', 'fonts'); regular_font_path = os.path.join(font_dir, 'DejaVuSans.ttf') # Usar app.root_path
             if os.path.exists(regular_font_path): self.add_font('DejaVu', '', regular_font_path, uni=True); self.add_font('DejaVu', 'B', regular_font_path, uni=True); self.font_name = 'DejaVu'; self.font_name_bold = 'DejaVu'; logger.info("Fonte DejaVu carregada para PDF.")
-            else: logger.warning("Fonte DejaVuSans.ttf não encontrada. Usando Arial.")
+            else: logger.warning(f"Fonte DejaVuSans.ttf não encontrada em {regular_font_path}. Usando Arial.")
         except Exception as e: logger.error(f"Erro ao carregar fonte PDF: {e}")
     def header(self):
         title_x_offset = self.l_margin
         if self.logo_path and os.path.exists(self.logo_path):
             try: logo_w = 15; self.image(self.logo_path, x=self.l_margin, y=8, w=logo_w); title_x_offset = self.l_margin + logo_w + 5
-            except Exception as e: logger.error(f"Erro ao adicionar logo ao PDF: {e}")
+            except Exception as e_logo: logger.error(f"Erro ao adicionar logo ao PDF ({self.logo_path}): {e_logo}")
         else:
             if self.logo_path: logger.warning(f"Logo PDF não encontrado: {self.logo_path}")
         self.set_font(self.font_name_bold, 'B' if self.font_name_bold == 'DejaVu' else '', 14) 
@@ -469,7 +483,7 @@ def imprimir_relatorio_pendentes():
     try:
         pendentes = get_pendentes(filtros=filtros_query, db_name=app.config['DATABASE'])
         now_sp = datetime.now(pytz.timezone('America/Sao_Paulo')); gen_info = f"Gerado em: {now_sp.strftime('%d/%m/%Y %H:%M:%S')} por {current_user.username}"
-        logo_path = os.path.join(app.static_folder, 'images', 'polis_logo.png')
+        logo_path = os.path.join(app.root_path, 'static', 'images', 'polis_logo.png') # Usar app.root_path
         pdf = PDFReport(orientation='L', gen_info_str=gen_info, page_title="Relatório de Pendências", logo_path=logo_path)
         pdf.alias_nb_pages(); pdf.add_page(); pdf.section_title("Filtros Aplicados"); pdf.section_body(get_filters_as_text_list_for_pdf_pendentes(filtros_form))
         headers = ["Pedido Ref.", "Fornecedor", "Filial", "Valor", "Status", "Importado em"]; widths = [45,65,45,30,35,37]
@@ -477,10 +491,18 @@ def imprimir_relatorio_pendentes():
         pdf.section_title("Dados das Pendências")
         if data_pdf: pdf.print_table(headers,data_pdf,widths)
         else: pdf.set_font(pdf.font_name,'I',10); pdf.cell(0,10,"Nenhuma pendência encontrada.",0,1,'C')
-        out_bytes = pdf.output(dest='S'); out_bytes = out_bytes.encode('latin-1') if isinstance(out_bytes,str) else out_bytes
+        
+        out_bytes = pdf.output(dest='S') 
+        # FPDF2 (para Python 3) retorna bytes diretamente com dest='S'. A codificação para latin-1 não é necessária.
+        # if isinstance(out_bytes, str): out_bytes = out_bytes.encode('latin-1') # Remover ou comentar esta linha
+
         resp = make_response(out_bytes); resp.headers['Content-Type']='application/pdf'; resp.headers['Content-Disposition']=f'inline; filename=rel_pendencias_{now_sp.strftime("%Y%m%d_%H%M%S")}.pdf'
         log_audit("PDF_PENDENCIAS_GENERATED", f"Filtros: {filtros_form}"); return resp
-    except Exception as e: logger.error(f"Erro PDF pendências: {e}",exc_info=True); log_audit("PDF_PENDENCIAS_ERROR",f"Erro: {e}, Filtros: {filtros_form}"); flash("Erro ao gerar PDF.","error"); return redirect(url_for('relatorio_pendentes',**filtros_form))
+    except Exception as e: 
+        logger.error(f"Erro PDF pendências: {e}",exc_info=True)
+        log_audit("PDF_PENDENCIAS_ERROR",f"Erro: {e}, Filtros: {filtros_form}")
+        flash("Erro ao gerar PDF. Verifique os logs para mais detalhes.","error") # Mensagem de erro mais informativa
+        return redirect(url_for('relatorio_pendentes',**filtros_form))
 
 # --- CSRF Dummy ---
 @app.context_processor
