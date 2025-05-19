@@ -1,14 +1,15 @@
 <!DOCTYPE html>
-<html lang="pt-br" data-theme="light"> {# O tema padrão é definido aqui, o JS pode substituir #}
+<html lang="pt-br" data-theme="polis-azure-light"> {# Tema padrão inicial: Pólis Azure Light #}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Pólis{% endblock %} - Sistema de Gestão</title>
-    {# Font Awesome para ícones #}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" xintegrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    {# Folha de estilos principal da aplicação #}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    {# Bloco para estilos extra específicos da página #}
     {% block head_extra %}{% endblock %}
 </head>
 <body>
@@ -19,7 +20,6 @@
     <nav class="main-nav">
         <div class="main-nav-links">
             {% if current_user.is_authenticated %}
-                {# Links para utilizadores autenticados #}
                 <a href="{{ url_for('home') }}" class="{{ 'active' if request.endpoint == 'home' else '' }}"><i class="fas fa-home"></i> Home</a>
                 <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' else '' }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
                 <a href="{{ url_for('inserir_dados') }}" class="{{ 'active' if request.endpoint == 'inserir_dados' else '' }}"><i class="fas fa-file-upload"></i> Inserir Dados</a>
@@ -27,13 +27,11 @@
                 <a href="{{ url_for('relatorio_pendentes') }}" class="{{ 'active' if request.endpoint == 'relatorio_pendentes' else '' }}"><i class="fas fa-clipboard-list"></i> Rel. Pendentes</a>
                 <a href="{{ url_for('change_password') }}" class="{{ 'active' if request.endpoint == 'change_password' else '' }}"><i class="fas fa-user-shield"></i> Alterar Senha</a>
 
-                {# Links específicos para administradores #}
                 {% if current_user.username in ADMIN_USERNAMES %}
                     <a href="{{ url_for('add_user_admin') }}" class="{{ 'active' if request.endpoint == 'add_user_admin' else '' }}"><i class="fas fa-user-plus"></i> Adicionar Utilizador</a>
-                    <a href="{{ url_for('view_audit_log') }}" class="{{ 'active' if request.endpoint == 'view_audit_log' else '' }}"><i class="fas fa-history"></i> Log de Auditoria</a> {# NOVO LINK #}
+                    <a href="{{ url_for('view_audit_log') }}" class="{{ 'active' if request.endpoint == 'view_audit_log' else '' }}"><i class="fas fa-history"></i> Log de Auditoria</a>
                 {% endif %}
             {% else %}
-                {# Link para utilizadores não autenticados #}
                 <a href="{{ url_for('login') }}" class="{{ 'active' if request.endpoint == 'login' else '' }}"><i class="fas fa-sign-in-alt"></i> Login</a>
             {% endif %}
         </div>
@@ -44,19 +42,34 @@
                  <a href="{{ url_for('logout') }}" class="logout-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </div>
             {% endif %}
-            {# Botão para alternar o tema claro/escuro #}
-            <button id="theme-toggle" class="theme-toggle-btn" title="Alternar tema">
-                <i class="fas fa-moon"></i> {# Ícone para tema escuro #}
-                <i class="fas fa-sun"></i>  {# Ícone para tema claro #}
-            </button>
+            
+            <div class="theme-selector-container">
+                <label for="theme-select" class="sr-only">Selecionar Tema</label> {# sr-only para acessibilidade se o ícone for suficiente #}
+                <i class="fas fa-palette nav-icon-theme" aria-hidden="true"></i>
+                <select id="theme-select" title="Selecionar Tema Visual">
+                    <optgroup label="Pólis Azure">
+                        <option value="polis-azure-light">Azure Claro</option>
+                        <option value="polis-azure-dark">Azure Escuro</option>
+                    </optgroup>
+                    <optgroup label="Ethos Urbano">
+                        <option value="ethos-urbano-light">Urbano - Dia</option>
+                        <option value="ethos-urbano-dark">Urbano - Noite</option>
+                    </optgroup>
+                    <optgroup label="Oásis Digital">
+                        <option value="oasis-digital-light">Oásis - Alvorada</option>
+                        <option value="oasis-digital-dark">Oásis - Crepúsculo</option>
+                    </optgroup>
+                    <optgroup label="Ciber Prisma">
+                        <option value="ciber-prisma-light">Prisma - Espectro</option>
+                        <option value="ciber-prisma-dark">Prisma - Vácuo</option>
+                    </optgroup>
+                </select>
+            </div>
         </div>
     </nav>
 
     <main class="container">
-        {# Bloco para mensagens antes das flash messages, se necessário #}
         {% block before_flash_messages %}{% endblock %}
-        
-        {# Exibição de flash messages (sucesso, erro, aviso, info) #}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <ul class="flash-messages">
@@ -67,7 +80,6 @@
             {% endif %}
         {% endwith %}
         
-        {# Bloco principal de conteúdo da página #}
         {% block content %}{% endblock %}
     </main>
 
@@ -75,41 +87,41 @@
         <p>&copy; {{ current_year }} Pólis. Todos os direitos reservados.</p>
     </footer>
 
-    {# Script para alternância de tema #}
     <script>
         (function() {
-            const themeToggle = document.getElementById('theme-toggle');
-            const htmlEl = document.documentElement; // O elemento <html>
+            const themeSelect = document.getElementById('theme-select');
+            const htmlEl = document.documentElement;
+            const storageKey = 'polisAppPreferredTheme_v2'; // Nova chave para evitar conflitos com versões antigas
 
-            // Função para definir o tema e guardá-lo no localStorage
-            function setTheme(theme) {
-                htmlEl.setAttribute('data-theme', theme);
-                localStorage.setItem('polisTheme', theme); // Guarda a preferência
-            }
-
-            // Verifica se há um tema guardado no localStorage
-            let initialTheme = localStorage.getItem('polisTheme');
-            if (!initialTheme) {
-                // Se não houver, verifica a preferência do sistema operativo
-                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                    initialTheme = 'dark';
-                } else {
-                    initialTheme = 'light'; // Padrão para claro
+            function applyTheme(themeName) {
+                if (themeName) {
+                    htmlEl.setAttribute('data-theme', themeName);
+                    localStorage.setItem(storageKey, themeName);
+                    if (themeSelect && themeSelect.value !== themeName) {
+                        themeSelect.value = themeName;
+                    }
                 }
             }
-            setTheme(initialTheme); // Aplica o tema inicial
 
-            // Event listener para o botão de alternância
-            if (themeToggle) {
-                themeToggle.addEventListener('click', () => {
-                    const currentTheme = htmlEl.getAttribute('data-theme');
-                    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-                    setTheme(newTheme);
+            let preferredTheme = localStorage.getItem(storageKey);
+            if (!preferredTheme) {
+                // Tenta detetar o modo do sistema para o tema padrão (Pólis Azure)
+                const defaultBaseTheme = 'polis-azure';
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    preferredTheme = defaultBaseTheme + '-dark';
+                } else {
+                    preferredTheme = defaultBaseTheme + '-light';
+                }
+            }
+            applyTheme(preferredTheme); // Aplica o tema ao carregar
+
+            if (themeSelect) {
+                themeSelect.addEventListener('change', function() {
+                    applyTheme(this.value);
                 });
             }
         })();
     </script>
-    {# Bloco para scripts extra específicos da página #}
     {% block scripts_extra %}{% endblock %}
 </body>
 </html>
