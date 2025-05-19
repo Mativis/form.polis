@@ -10,7 +10,7 @@ from datetime import datetime
 import logging
 import pytz
 import re
-from fpdf import FPDF 
+# Removido: from fpdf import FPDF 
 
 from utils.excel_processor import (
     processar_excel_cobrancas,
@@ -91,21 +91,6 @@ def admin_required(f):
             flash("Você não tem permissão para aceder a esta página.", "error"); return redirect(url_for('home'))
         return f(*args, **kwargs)
     return decorated_function
-
-def get_filters_as_text_list_for_pdf_pendentes(filtros_aplicados_form_dict):
-    lines = []
-    if filtros_aplicados_form_dict:
-        key_map_display = {
-            'pedido_ref': 'Pedido Ref.', 'fornecedor': 'Fornecedor',
-            'filial_pend': 'Filial', 'status_pend': 'Status',
-            'valor_min': 'Valor Mínimo', 'valor_max': 'Valor Máximo'
-        }
-        for key_form, value in filtros_aplicados_form_dict.items():
-            if value:
-                display_key = key_map_display.get(key_form, key_form.replace("_", " ").title())
-                value_display = format_currency_filter(value) if 'valor' in key_form else value
-                lines.append(f"{display_key}: {value_display}")
-    return lines
 
 # --- Log de Auditoria ---
 def log_audit(action: str, details: str = None):
@@ -264,9 +249,7 @@ def change_password():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    db_path = app.config['DATABASE']
-    status_sem_cobranca = 'S/ Cobrança'
-    
+    db_path = app.config['DATABASE']; status_sem_cobranca = 'S/ Cobrança'
     try:
         count_sem_cobranca = get_count_pedidos_status_especifico(status_sem_cobranca, db_path)
         count_lancados = get_count_total_pedidos_lancados(db_path) 
@@ -274,20 +257,10 @@ def dashboard():
         pedidos_sc_por_filial = get_pedidos_status_por_filial(status_sem_cobranca, db_path)
         placas_sc = get_placas_status_especifico(status_sem_cobranca, db_path)
     except Exception as e:
-        logger.error(f"Erro ao carregar dados para o dashboard: {e}", exc_info=True)
-        flash("Erro ao carregar dados para o dashboard. Tente novamente.", "error")
-        count_sem_cobranca = 0; count_lancados = 0; count_nao_conforme = 0
-        pedidos_sc_por_filial = []; placas_sc = []
-
-    return render_template(
-        'dashboard.html',
-        count_sem_cobranca=count_sem_cobranca,
-        count_lancados=count_lancados,
-        count_nao_conforme=count_nao_conforme,
-        pedidos_sc_por_filial=pedidos_sc_por_filial,
-        placas_sc=placas_sc,
-        status_sem_cobranca_label=status_sem_cobranca 
-    )
+        logger.error(f"Erro ao carregar dados para o dashboard: {e}", exc_info=True); flash("Erro ao carregar dados para o dashboard.", "error")
+        count_sem_cobranca = 0; count_lancados = 0; count_nao_conforme = 0; pedidos_sc_por_filial = []; placas_sc = []
+    return render_template('dashboard.html', count_sem_cobranca=count_sem_cobranca, count_lancados=count_lancados, count_nao_conforme=count_nao_conforme,
+                           pedidos_sc_por_filial=pedidos_sc_por_filial, placas_sc=placas_sc, status_sem_cobranca_label=status_sem_cobranca)
 
 # --- CRUD para Cobranças ---
 @app.route('/cobranca/<int:cobranca_id>/edit', methods=['GET', 'POST'])
@@ -297,13 +270,8 @@ def edit_cobranca(cobranca_id):
     if not cobranca: log_audit("EDIT_COBRANCA_NOT_FOUND", f"ID {cobranca_id} não encontrado."); flash("Cobrança não encontrada.", "error"); return redirect(url_for('relatorio_cobrancas'))
     form_data_repopulate = dict(cobranca) 
     if request.method == 'POST':
-        form_data_repopulate = {
-            'pedido': request.form.get('pedido', '').strip(), 'os': request.form.get('os', '').strip(),
-            'filial': request.form.get('filial', '').strip(), 'placa': request.form.get('placa', '').strip(),
-            'transportadora': request.form.get('transportadora', '').strip(),
-            'conformidade': request.form.get('conformidade', '').strip().upper(),
-            'status': request.form.get('status', '').strip()
-        }
+        form_data_repopulate = {k: request.form.get(k, '').strip() for k in cobranca.keys() if k != 'id'}
+        form_data_repopulate['conformidade'] = form_data_repopulate.get('conformidade','').upper()
         if not form_data_repopulate['pedido'] or not form_data_repopulate['os']: flash("Pedido e OS são campos obrigatórios.", "error")
         else:
             if update_cobranca_db(cobranca_id, form_data_repopulate, app.config['DATABASE']):
@@ -311,7 +279,6 @@ def edit_cobranca(cobranca_id):
             else: log_audit("EDIT_COBRANCA_FAILURE", f"Falha ao atualizar cobrança ID {cobranca_id}."); flash("Erro ao atualizar cobrança. Pedido/OS duplicado?", "error")
         return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id)
     return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id)
-
 @app.route('/cobranca/<int:cobranca_id>/delete', methods=['POST'])
 @login_required 
 def delete_cobranca_route(cobranca_id):
@@ -330,11 +297,7 @@ def edit_pendencia(pendencia_id):
     if not pendencia: log_audit("EDIT_PENDENCIA_NOT_FOUND", f"ID {pendencia_id} não encontrado."); flash("Pendência não encontrada.", "error"); return redirect(url_for('relatorio_pendentes'))
     form_data_repopulate = dict(pendencia); form_data_repopulate['valor'] = str(form_data_repopulate.get('valor', '')).replace('.', ',') 
     if request.method == 'POST':
-        form_data_repopulate = {
-            'pedido_ref': request.form.get('pedido_ref', '').strip(), 'fornecedor': request.form.get('fornecedor', '').strip(),
-            'filial': request.form.get('filial', '').strip(), 'valor': request.form.get('valor', '').strip(), 
-            'status': request.form.get('status', '').strip()
-        }
+        form_data_repopulate = {k: request.form.get(k, '').strip() for k in pendencia.keys() if k != 'id'}
         if not form_data_repopulate['pedido_ref']: flash("Pedido de Referência é obrigatório.", "error")
         else:
             try: 
@@ -347,7 +310,6 @@ def edit_pendencia(pendencia_id):
             except ValueError: flash("Valor da pendência inválido.", "error")
         return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id)
     return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id)
-
 @app.route('/pendencia/<int:pendencia_id>/delete', methods=['POST'])
 @login_required 
 def delete_pendencia_route(pendencia_id):
@@ -369,38 +331,20 @@ def relatorio_cobrancas():
         distinct_status = get_distinct_values('status', 'cobrancas', app.config['DATABASE'])
         distinct_filiais = get_distinct_values('filial', 'cobrancas', app.config['DATABASE'])
         distinct_conformidade = get_distinct_values('conformidade', 'cobrancas', app.config['DATABASE'])
-        
-        return render_template('relatorio_cobrancas.html', 
-                               cobrancas=cobrancas, 
-                               filtros=filtros_form, 
-                               distinct_status=distinct_status, 
-                               distinct_filiais=distinct_filiais,
-                               distinct_conformidade=distinct_conformidade) 
-    except Exception as e: 
-        logger.error(f"Erro relatório cobranças: {e}", exc_info=True)
-        flash("Erro ao carregar relatório de cobranças.", "error")
-        return render_template('relatorio_cobrancas.html', cobrancas=[], filtros=filtros_form, distinct_status=[], distinct_filiais=[], distinct_conformidade=[])
-
+        return render_template('relatorio_cobrancas.html', cobrancas=cobrancas, filtros=filtros_form, distinct_status=distinct_status, distinct_filiais=distinct_filiais, distinct_conformidade=distinct_conformidade) 
+    except Exception as e: logger.error(f"Erro relatório cobranças: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_cobrancas.html', cobrancas=[], filtros=filtros_form, distinct_status=[], distinct_filiais=[], distinct_conformidade=[])
 @app.route('/relatorio-pendentes')
 @login_required
 def relatorio_pendentes():
     filtros_form = {k: request.args.get(f'filtro_{k}', '').strip() for k in ['pedido_ref', 'fornecedor', 'filial_pend', 'status_pend', 'valor_min', 'valor_max']}
-    filtros_query = {}
-    for k, v in filtros_form.items():
-        if v:
-            if k == 'filial_pend': filtros_query['filial'] = v
-            elif k == 'status_pend': filtros_query['status'] = v
-            else: filtros_query[k] = v
+    filtros_query = { ( 'filial' if k=='filial_pend' else ('status' if k=='status_pend' else k) ) : v for k,v in filtros_form.items() if v}
     try:
         pendentes = get_pendentes(filtros=filtros_query, db_name=app.config['DATABASE'])
         distinct_status_pend = get_distinct_values('status', 'pendentes', app.config['DATABASE'])
         distinct_fornecedores_pend = get_distinct_values('fornecedor', 'pendentes', app.config['DATABASE'])
         distinct_filiais_pend = get_distinct_values('filial', 'pendentes', app.config['DATABASE'])
         return render_template('relatorio_pendentes.html', pendentes=pendentes, filtros=filtros_form, distinct_status_pend=distinct_status_pend, distinct_fornecedores_pend=distinct_fornecedores_pend, distinct_filiais_pend=distinct_filiais_pend)
-    except Exception as e: 
-        logger.error(f"Erro relatório pendências: {e}", exc_info=True)
-        flash("Erro ao carregar relatório de pendências.", "error")
-        return render_template('relatorio_pendentes.html', pendentes=[], filtros=filtros_form, distinct_status_pend=[], distinct_fornecedores_pend=[], distinct_filiais_pend=[])
+    except Exception as e: logger.error(f"Erro relatório pendências: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_pendentes.html', pendentes=[], filtros=filtros_form, distinct_status_pend=[], distinct_fornecedores_pend=[], distinct_filiais_pend=[])
 
 # --- Rota de Visualização do Log de Auditoria (Admin) ---
 @app.route('/admin/audit_log')
@@ -435,74 +379,8 @@ def view_audit_log():
     except Exception as e: logger.error(f"Erro ao buscar logs: {e}"); flash("Erro ao buscar logs.", "error")
     return render_template('admin/view_audit_log.html', logs=logs_processed, current_page=page, total_pages=total_pages, filters=filters_form, total_logs=total_logs)
 
-# --- Geração de PDF ---
-class PDFReport(FPDF):
-    def __init__(self, orientation='L', unit='mm', format='A4', gen_info_str="", page_title="Relatório - Pólis", logo_path=None):
-        super().__init__(orientation, unit, format); self.gen_info_str = gen_info_str; self.page_title_text = page_title; self.logo_path = logo_path
-        self.set_left_margin(10); self.set_right_margin(10); self.set_auto_page_break(auto=True, margin=15) 
-        self.font_name = 'Arial'; self.font_name_bold = 'Arial' 
-        try:
-            font_dir = os.path.join(app.root_path, 'static', 'fonts'); regular_font_path = os.path.join(font_dir, 'DejaVuSans.ttf') # Usar app.root_path
-            if os.path.exists(regular_font_path): self.add_font('DejaVu', '', regular_font_path, uni=True); self.add_font('DejaVu', 'B', regular_font_path, uni=True); self.font_name = 'DejaVu'; self.font_name_bold = 'DejaVu'; logger.info("Fonte DejaVu carregada para PDF.")
-            else: logger.warning(f"Fonte DejaVuSans.ttf não encontrada em {regular_font_path}. Usando Arial.")
-        except Exception as e: logger.error(f"Erro ao carregar fonte PDF: {e}")
-    def header(self):
-        title_x_offset = self.l_margin
-        if self.logo_path and os.path.exists(self.logo_path):
-            try: logo_w = 15; self.image(self.logo_path, x=self.l_margin, y=8, w=logo_w); title_x_offset = self.l_margin + logo_w + 5
-            except Exception as e_logo: logger.error(f"Erro ao adicionar logo ao PDF ({self.logo_path}): {e_logo}")
-        else:
-            if self.logo_path: logger.warning(f"Logo PDF não encontrado: {self.logo_path}")
-        self.set_font(self.font_name_bold, 'B' if self.font_name_bold == 'DejaVu' else '', 14) 
-        available_width = self.w - title_x_offset - self.r_margin; title_w = self.get_string_width(self.page_title_text) + 6
-        self.set_x(title_x_offset + (available_width - title_w) / 2); self.cell(title_w, 10, self.page_title_text, 0, 1, 'C'); self.ln(4) 
-    def footer(self): self.set_y(-15); self.set_font(self.font_name, 'I', 8); self.cell(0, 10, f'Página {self.page_no()}/{{nb}}', 0, 0, 'C'); self.set_xy(self.l_margin, -15); self.cell(0, 10, self.gen_info_str, 0, 0, 'L')
-    def section_title(self, title): self.set_font(self.font_name_bold, 'B' if self.font_name_bold == 'DejaVu' else '', 11); self.set_fill_color(230,230,230); self.cell(0,7,title,0,1,'L',True); self.ln(3)
-    def section_body(self, lines): self.set_font(self.font_name,'',9); [self.multi_cell(0,5,str(l),0,'L') for l in lines]; self.ln(2)
-    def print_table(self, headers, data, widths):
-        self.set_font(self.font_name_bold,'B' if self.font_name_bold == 'DejaVu' else '',7.5); self.set_fill_color(220,220,220); self.set_line_width(0.2); self.set_draw_color(180,180,180)
-        for i,h in enumerate(headers): self.cell(widths[i],7,str(h),1,0,'C',True)
-        self.ln(); self.set_font(self.font_name,'',7); fill=False
-        for row in data:
-            h_base=6; 
-            if self.get_y()+h_base > self.page_break_trigger: self.add_page(self.cur_orientation); self.set_font(self.font_name_bold,'B' if self.font_name_bold == 'DejaVu' else '',7.5); self.set_fill_color(220,220,220); [self.cell(widths[j],7,str(h_col),1,0,'C',True) for j,h_col in enumerate(headers)]; self.ln(); self.set_font(self.font_name,'',7)
-            self.set_fill_color(*( (245,245,245) if fill else (255,255,255) )); max_h=h_base
-            for i,val in enumerate(row): max_h=max(max_h, len(self.multi_cell(widths[i]-2,4,str(val if val is not None else 'N/A'),0,'L',split_only=True))*4+2)
-            y_row=self.get_y()
-            for i,val in enumerate(row):
-                x_cell=self.get_x(); self.rect(x_cell,y_row,widths[i],max_h,'DF'); pad_x=1
-                n_lines_cell=len(self.multi_cell(widths[i]-(2*pad_x),4,str(val if val is not None else 'N/A'),0,'L',split_only=True))
-                pad_y=max(1,(max_h-(n_lines_cell*4))/2) if n_lines_cell > 0 else max(1, (max_h-4)/2) 
-                self.set_xy(x_cell+pad_x,y_row+pad_y); self.multi_cell(widths[i]-(2*pad_x),4,str(val if val is not None else 'N/A'),0,('R' if headers[i].lower()=="valor" else 'L'),False); self.set_xy(x_cell+widths[i],y_row)
-            self.ln(max_h); fill=not fill
-@app.route('/relatorio-pendentes/imprimir')
-@login_required
-def imprimir_relatorio_pendentes():
-    filtros_form = {k: request.args.get(f'filtro_{k}', '').strip() for k in ['pedido_ref', 'fornecedor', 'filial_pend', 'status_pend', 'valor_min', 'valor_max']}
-    filtros_query = { ( 'filial' if k=='filial_pend' else ('status' if k=='status_pend' else k) ) : v for k,v in filtros_form.items() if v}
-    try:
-        pendentes = get_pendentes(filtros=filtros_query, db_name=app.config['DATABASE'])
-        now_sp = datetime.now(pytz.timezone('America/Sao_Paulo')); gen_info = f"Gerado em: {now_sp.strftime('%d/%m/%Y %H:%M:%S')} por {current_user.username}"
-        logo_path = os.path.join(app.root_path, 'static', 'images', 'polis_logo.png') # Usar app.root_path
-        pdf = PDFReport(orientation='L', gen_info_str=gen_info, page_title="Relatório de Pendências", logo_path=logo_path)
-        pdf.alias_nb_pages(); pdf.add_page(); pdf.section_title("Filtros Aplicados"); pdf.section_body(get_filters_as_text_list_for_pdf_pendentes(filtros_form))
-        headers = ["Pedido Ref.", "Fornecedor", "Filial", "Valor", "Status", "Importado em"]; widths = [45,65,45,30,35,37]
-        data_pdf = [[r['pedido_ref'],r['fornecedor'],r['filial'],format_currency_filter(r['valor']),r['status'],r['data_importacao_fmt']] for r in pendentes] if pendentes else []
-        pdf.section_title("Dados das Pendências")
-        if data_pdf: pdf.print_table(headers,data_pdf,widths)
-        else: pdf.set_font(pdf.font_name,'I',10); pdf.cell(0,10,"Nenhuma pendência encontrada.",0,1,'C')
-        
-        out_bytes = pdf.output(dest='S') 
-        # FPDF2 (para Python 3) retorna bytes diretamente com dest='S'. A codificação para latin-1 não é necessária.
-        # if isinstance(out_bytes, str): out_bytes = out_bytes.encode('latin-1') # Remover ou comentar esta linha
-
-        resp = make_response(out_bytes); resp.headers['Content-Type']='application/pdf'; resp.headers['Content-Disposition']=f'inline; filename=rel_pendencias_{now_sp.strftime("%Y%m%d_%H%M%S")}.pdf'
-        log_audit("PDF_PENDENCIAS_GENERATED", f"Filtros: {filtros_form}"); return resp
-    except Exception as e: 
-        logger.error(f"Erro PDF pendências: {e}",exc_info=True)
-        log_audit("PDF_PENDENCIAS_ERROR",f"Erro: {e}, Filtros: {filtros_form}")
-        flash("Erro ao gerar PDF. Verifique os logs para mais detalhes.","error") # Mensagem de erro mais informativa
-        return redirect(url_for('relatorio_pendentes',**filtros_form))
+# --- Geração de PDF (REMOVIDA) ---
+# A classe PDFReport e a rota imprimir_relatorio_pendentes foram removidas.
 
 # --- CSRF Dummy ---
 @app.context_processor

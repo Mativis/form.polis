@@ -53,14 +53,14 @@
                 <div class="form-group-actions">
                     <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Filtrar</button>
                     <a href="{{ url_for('relatorio_pendentes') }}" class="btn btn-secondary btn-sm"><i class="fas fa-times-circle"></i> Limpar</a>
-                    <button type="button" onclick="imprimirRelatorioPendentes()" class="btn btn-info btn-sm"><i class="fas fa-print"></i> Imprimir</button>
+                    {# Botão Imprimir Removido #}
                 </div>
             </form>
         </div>
     </div>
 
-    <div class="card"> {# Envolver a tabela num card #}
-        <div class="card-body table-responsive-container"> {# Para padding e responsividade da tabela #}
+    <div class="card">
+        <div class="card-body table-responsive-container">
             {% if pendentes %}
                 <div class="table-responsive">
                     <table class="table table-striped table-hover">
@@ -110,23 +110,13 @@
                 <p>Nenhuma pendência encontrada com os filtros aplicados ou não há pendências registadas.</p>
             </div>
             {% endif %}
-        </div> {# Fim de .card-body #}
-    </div> {# Fim de .card #}
+        </div> 
+    </div> 
 {% endblock %}
 
 {% block scripts_extra %}
 {{ super() }}
-<script>
-function imprimirRelatorioPendentes() {
-    const form = document.getElementById('pendentesFilterForm');
-    const params = new URLSearchParams(new FormData(form));
-    const cleanParams = new URLSearchParams();
-    for (const [key, value] of params) {
-        if (value && value.trim() !== '') { cleanParams.append(key, value); }
-    }
-    window.open("{{ url_for('imprimir_relatorio_pendentes') }}?" + cleanParams.toString(), '_blank');
-}
-</script>
+{# Script imprimirRelatorioPendentes() Removido #}
 {% endblock %}
 
 {% block head_extra %}
