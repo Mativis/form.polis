@@ -55,8 +55,8 @@
                 <thead>
                     <tr>
                         <th class="col-id">ID</th>
-                        <th>Pedido</th>
-                        <th>OS</th>
+                        <th>Pedido</th> {# Coluna do Pedido #}
+                        <th>OS</th> {# Coluna da Ordem de Serviço #}
                         <th>Filial</th>
                         <th>Placa</th>
                         <th>Transportadora</th>
@@ -70,8 +70,26 @@
                     {% for cobranca in cobrancas %}
                     <tr>
                         <td class="cell-id">{{ cobranca.id }}</td>
-                        <td>{{ cobranca.pedido | default('N/A') }}</td>
-                        <td>{{ cobranca.os | default('N/A') }}</td>
+                        {# NOVO: Pedido como link clicável #}
+                        <td>
+                            {% if cobranca.pedido and cobranca.pedido != 'N/A' %}
+                                <a href="https://sistema.transac.com.br/aSistema/pedido/visualizar/id/{{ cobranca.pedido }}" target="_blank" title="Visualizar Pedido no Transac: {{ cobranca.pedido }}">
+                                    {{ cobranca.pedido }} <i class="fas fa-external-link-alt fa-xs"></i>
+                                </a>
+                            {% else %}
+                                {{ cobranca.pedido | default('N/A') }}
+                            {% endif %}
+                        </td>
+                        {# OS como link clicável #}
+                        <td>
+                            {% if cobranca.os and cobranca.os != 'N/A' %}
+                                <a href="https://sistema.transac.com.br/aSistema/os/visualizar/id/{{ cobranca.os }}" target="_blank" title="Visualizar OS no Transac: {{ cobranca.os }}">
+                                    {{ cobranca.os }} <i class="fas fa-external-link-alt fa-xs"></i>
+                                </a>
+                            {% else %}
+                                {{ cobranca.os | default('N/A') }}
+                            {% endif %}
+                        </td>
                         <td>{{ cobranca.filial | default('N/A') }}</td>
                         <td>{{ cobranca.placa | default('N/A') }}</td>
                         <td>{{ cobranca.transportadora | default('N/A') }}</td>
@@ -85,13 +103,13 @@
                                 {{ cobranca.status | default('N/A') }}
                             </span>
                         </td>
-                        <td class="cell-date">{{ cobranca.data_importacao_fmt | default('N/A') }}</td> {# Utiliza a data formatada do backend #}
+                        <td class="cell-date">{{ cobranca.data_importacao_fmt | default('N/A') }}</td>
                         <td class="cell-actions text-center">
                             <a href="{{ url_for('edit_cobranca', cobranca_id=cobranca.id) }}" class="btn btn-sm btn-info" title="Editar">
                                 <i class="fas fa-edit"></i>
                             </a>
                             <form method="POST" action="{{ url_for('delete_cobranca_route', cobranca_id=cobranca.id) }}" style="display: inline-block;" onsubmit="return confirm('Tem a certeza que deseja apagar esta cobrança? Esta ação não pode ser desfeita.');">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"> {# Para proteção CSRF #}
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-danger" title="Apagar">
                                     <i class="fas fa-trash-alt"></i>
                                 </button>
@@ -112,25 +130,29 @@
 {% endblock %}
 
 {% block head_extra %}
-{{ super() }} {# Para herdar estilos de base.html, se houver #}
+{{ super() }}
 <style>
-    /* Estilos para inputs de filtro e botões de ação, se não cobertos pelo style.css geral */
     .form-control-sm {
         padding: 0.3rem 0.6rem;
         font-size: 0.875rem;
-        height: calc(1.5em + .3rem + 2px); /* Ajustar altura se necessário */
+        height: calc(1.5em + .3rem + 2px);
     }
-    .btn-sm { /* Botões de filtro e ação */
+    .btn-sm {
         padding: 0.25rem 0.5rem;
         font-size: 0.75rem; 
         line-height: 1.5;
     }
-    .col-actions { /* Largura da coluna de ações */
-        width: 100px; /* Ajustar conforme o espaço necessário para os botões */
-        white-space: nowrap; /* Evita que os botões quebrem linha */
+    .col-actions {
+        width: 100px; 
+        white-space: nowrap;
     }
     .cell-actions .btn {
-        margin: 0 2px; /* Pequeno espaçamento entre botões de editar e apagar */
+        margin: 0 2px;
+    }
+    .fa-xs {
+        font-size: 0.70em; 
+        margin-left: 3px;
+        opacity: 0.7;
     }
 </style>
 {% endblock %}

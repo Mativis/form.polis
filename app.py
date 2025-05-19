@@ -37,7 +37,7 @@ app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__fil
 app.config['DATABASE'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'polis_database.db')
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_SESSION_COOKIE_SECURE', 'False').lower() == 'true'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Ou 'Strict' para maior segurança
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' 
 ALLOWED_EXTENSIONS = {'xlsx', 'csv'}
 
 # --- Configuração do Logging ---
@@ -95,7 +95,7 @@ def load_user(user_id):
     except sqlite3.Error as e:
         logger.error(f"Erro SQLite ao carregar utilizador (ID: {user_id}): {e}", exc_info=True)
         return None
-    except Exception as e_gen: # Captura outras excepções
+    except Exception as e_gen: 
         logger.error(f"Erro geral ao carregar utilizador (ID: {user_id}): {e_gen}", exc_info=True)
         return None
 
@@ -133,7 +133,7 @@ def log_audit(action: str, details: str = None):
         user_id = current_user.id if current_user and current_user.is_authenticated else None
         username = current_user.username if current_user and current_user.is_authenticated else 'Anonymous'
         ip_address = request.remote_addr
-        timestamp_utc = datetime.now(pytz.utc) # Sempre gravar em UTC
+        timestamp_utc = datetime.now(pytz.utc) 
 
         cursor = db.cursor()
         cursor.execute("""
@@ -141,7 +141,6 @@ def log_audit(action: str, details: str = None):
             VALUES (?, ?, ?, ?, ?, ?)
         """, (timestamp_utc.strftime('%Y-%m-%d %H:%M:%S'), user_id, username, action, str(details) if details else None, ip_address))
         db.commit()
-        # Logar também no ficheiro de log da aplicação para debug, se necessário
         logger.info(f"AUDIT_LOG: User '{username}' (ID: {user_id}, IP: {ip_address}) -> Action: {action}, Details: {details}")
     except Exception as e:
         logger.error(f"Erro ao registrar no log de auditoria (Action: {action}): {e}", exc_info=True)
@@ -163,8 +162,7 @@ def format_currency_filter(value):
         num = float(value)
         return f"R$ {num:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except (ValueError, TypeError):
-        # logger.warning(f"Não foi possível formatar '{value}' como moeda.") # Pode ser muito verboso
-        return str(value) # Retorna o valor original se não puder formatar
+        return str(value) 
 
 @app.template_filter('format_date_br')
 def format_date_br_filter(value_str_or_dt):
@@ -173,7 +171,6 @@ def format_date_br_filter(value_str_or_dt):
     try:
         dt_obj = None
         if isinstance(value_str_or_dt, str):
-            # Tenta o formato que vem do banco (YYYY-MM-DD HH:MM:SS) ou apenas data
             date_part_str = value_str_or_dt.split(' ')[0]
             common_formats = ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%m/%d/%Y', 
                               '%d/%m/%y', '%y-%m-%d', '%d-%m-%y', '%m/%d/%y')
@@ -184,16 +181,14 @@ def format_date_br_filter(value_str_or_dt):
                 except ValueError:
                     continue
             if not dt_obj:
-                # logger.debug(f"Não foi possível converter a string de data '{value_str_or_dt}' com formatos conhecidos.")
-                return value_str_or_dt # Retorna original se não conseguir parsear
+                return value_str_or_dt 
         elif isinstance(value_str_or_dt, datetime):
             dt_obj = value_str_or_dt
         else:
-            return str(value_str_or_dt) # Retorna original para outros tipos
+            return str(value_str_or_dt) 
         return dt_obj.strftime('%d/%m/%Y') if dt_obj else value_str_or_dt
     except Exception as e:
-        # logger.warning(f"Erro ao formatar data '{value_str_or_dt}': {e}")
-        return str(value_str_or_dt) # Retorna original em caso de erro
+        return str(value_str_or_dt) 
 
 
 @app.template_filter('normalize_css')
@@ -203,12 +198,11 @@ def normalize_for_css(value):
     norm_value = value.strip().lower()
     norm_value = norm_value.replace(' ', '-').replace('/', '-').replace('.', '-').replace('(', '').replace(')', '')
     norm_value = norm_value.replace('ç', 'c').replace('ã', 'a').replace('á', 'a')
-    norm_value = norm_value.replace('é', 'e').replace('ê', 'e')
-    norm_value = norm_value.replace('í', 'i')
+    norm_value = norm_value.replace('é', 'e').replace('ê', 'e').replace('í', 'i')
     norm_value = norm_value.replace('ó', 'o').replace('ô', 'o').replace('õ', 'o')
     norm_value = norm_value.replace('ú', 'u').replace('ü', 'u')
-    norm_value = re.sub(r'[^\w-]', '', norm_value) # Remove caracteres não alfanuméricos exceto - e _
-    norm_value = re.sub(r'-+', '-', norm_value).strip('-') # Remove múltiplos hífens e nas pontas
+    norm_value = re.sub(r'[^\w-]', '', norm_value) 
+    norm_value = re.sub(r'-+', '-', norm_value).strip('-') 
     return norm_value if norm_value else 'desconhecido'
 
 
@@ -216,15 +210,13 @@ def normalize_for_css(value):
 @app.after_request
 def add_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'SAMEORIGIN' # Ou 'DENY' se não usar iframes
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN' 
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-    # Content-Security-Policy é poderoso mas complexo de configurar corretamente sem quebrar a aplicação.
-    # Exemplo básico (ajustar conforme necessário):
-    # response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com;"
     return response
 
 # --- Rotas Principais e de Autenticação ---
+# ... (Rotas /login, /logout, /home como definidas anteriormente) ...
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
@@ -234,29 +226,26 @@ def login():
         password = request.form.get('password', '')
         if not username or not password:
             flash('Nome de utilizador e senha são obrigatórios.', 'error')
-            return render_template('login.html', username=username) # Passa username de volta para o form
+            return render_template('login.html', username=username) 
         
         user_data = get_user_by_username_from_db(username)
         if user_data and check_password_hash(user_data['password_hash'], password):
             user_obj = User(id=user_data['id'], username=user_data['username'])
-            login_user(user_obj) # Opcional: adicionar remember=True se tiver um checkbox "Lembrar-me"
+            login_user(user_obj) 
             log_audit("LOGIN_SUCCESS", f"Utilizador '{username}' logado.")
             flash('Login realizado com sucesso!', 'success')
             next_page = request.args.get('next')
-            # Validar 'next_page' para prevenir Open Redirect Vulnerability se vier de fonte não confiável
-            # if next_page and not is_safe_url(next_page): return abort(400)
             return redirect(next_page or url_for('home'))
         else:
             log_audit("LOGIN_FAILURE", f"Tentativa de login falhou para o utilizador '{username}'.")
             flash('Utilizador ou senha inválidos.', 'error')
-            # Não é recomendado logar a senha, mesmo que errada.
             logger.warning(f"Falha de login para o utilizador: {username}") 
     return render_template('login.html')
 
 @app.route('/logout')
 @login_required
 def logout():
-    username_logged_out = current_user.username # Captura antes do logout
+    username_logged_out = current_user.username 
     logout_user()
     log_audit("LOGOUT", f"Utilizador '{username_logged_out}' deslogado.")
     flash('Você foi desconectado com sucesso.', 'success')
@@ -269,6 +258,7 @@ def home():
     return render_template('home.html')
 
 # --- Rota de Inserção de Dados ---
+# ... (Rota /inserir-dados como definida anteriormente) ...
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -280,7 +270,7 @@ def inserir_dados():
         file_input_name = None
         process_function = None
         data_type_message = ""
-        anchor = "" # Para redirecionar para a secção correta da página
+        anchor = "" 
 
         if action == 'import_cobrancas':
             file_input_name = 'excel_file_cobrancas'
@@ -308,17 +298,16 @@ def inserir_dados():
             flash('Formato de ficheiro inválido. Use .xlsx ou .csv.', 'error')
             return redirect(url_for('inserir_dados') + anchor)
         
-        filename = secure_filename(file_to_process.filename) # Segurança
+        filename = secure_filename(file_to_process.filename) 
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file_extension = os.path.splitext(filename)[1].lower()
 
         try:
             file_to_process.save(file_path)
             logger.info(f"Ficheiro '{filename}' salvo em '{file_path}' para processamento de {data_type_message}.")
-            # Passar db_name para a função de processamento
             success, message = process_function(file_path, file_extension, app.config['DATABASE'])
             
-            log_action = f"DATA_IMPORT_{action.upper()}" # Ex: DATA_IMPORT_IMPORT_COBRANCAS
+            log_action = f"DATA_IMPORT_{action.upper()}" 
             log_details = f"Ficheiro: {filename}, Tipo: {data_type_message}, Resultado: {'Sucesso' if success else 'Falha'}, Mensagem: {message}"
             log_audit(log_action, log_details)
 
@@ -338,25 +327,25 @@ def inserir_dados():
     return render_template('inserir_dados.html')
 
 # --- Rotas de Administração ---
+# ... (Rotas /admin/add_user, /alterar-senha, /dashboard como definidas anteriormente) ...
 @app.route('/admin/add_user', methods=['GET', 'POST'])
 @admin_required
 def add_user_admin():
-    form_data = {} # Para repopular o formulário em caso de erro
+    form_data = {} 
     form_errors = {}
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         confirm_password = request.form.get('confirm_password', '')
-        form_data['username'] = username # Guardar para repopular
+        form_data['username'] = username 
 
-        # Validações
         if not username: form_errors['username'] = 'Nome de utilizador é obrigatório.'
         if not password: form_errors['password'] = 'Senha é obrigatória.'
         elif len(password) < 6: form_errors['password'] = 'A senha deve ter pelo menos 6 caracteres.'
         if not confirm_password: form_errors['confirm_password'] = 'Confirmação de senha é obrigatória.'
         elif password != confirm_password: form_errors['confirm_password'] = 'As senhas não coincidem.'
 
-        if not form_errors: # Se não houver erros de formulário
+        if not form_errors: 
             try:
                 db = get_db()
                 cursor = db.cursor()
@@ -372,23 +361,20 @@ def add_user_admin():
                     log_audit("ADMIN_ADD_USER_SUCCESS", f"Administrador '{current_user.username}' adicionou novo utilizador '{username}'.")
                     logger.info(f"Utilizador '{username}' adicionado pelo administrador '{current_user.username}'.")
                     flash(f'Utilizador "{username}" adicionado com sucesso!', 'success')
-                    return redirect(url_for('add_user_admin')) # Limpa o formulário após sucesso
+                    return redirect(url_for('add_user_admin')) 
             except sqlite3.Error as e_sql:
-                db.rollback() # Importante em caso de erro de DB
+                db.rollback() 
                 logger.error(f"Erro de banco de dados ao adicionar utilizador '{username}': {e_sql}", exc_info=True)
                 log_audit("ADMIN_ADD_USER_DB_ERROR", f"Erro ao adicionar utilizador '{username}': {e_sql}")
                 flash('Erro no banco de dados ao tentar adicionar utilizador. Tente novamente.', 'error')
             except Exception as e_gen:
                 logger.error(f"Erro geral ao adicionar utilizador '{username}': {e_gen}", exc_info=True)
                 flash('Ocorreu um erro inesperado. Tente novamente.', 'error')
-        else: # Se houver form_errors
-             # Os erros já foram adicionados a form_errors, o template irá exibi-los
-             for error_msg in form_errors.values(): flash(error_msg, 'error') # Também mostra flash messages
+        else: 
+             for error_msg in form_errors.values(): flash(error_msg, 'error') 
 
-        # Renderiza o template com os dados e erros (se houver)
         return render_template('admin/add_user.html', username=form_data.get('username',''), form_errors=form_errors)
 
-    # Para GET request
     return render_template('admin/add_user.html', username='', form_errors={})
 
 
@@ -412,15 +398,14 @@ def change_password():
         elif new_password != confirm_new_password:
             form_errors['confirm_new_password'] = 'A nova senha e a confirmação não coincidem.'
 
-        if not form_errors: # Procede apenas se as validações básicas passarem
+        if not form_errors: 
             user_db_data = get_user_by_username_from_db(current_user.username)
             if not user_db_data or not check_password_hash(user_db_data['password_hash'], current_password):
                 form_errors['current_password'] = 'Senha atual incorreta.'
-            elif current_password == new_password: # Verifica se a nova senha é igual à atual
+            elif current_password == new_password: 
                 form_errors['new_password'] = 'A nova senha deve ser diferente da senha atual.'
-            # Opcional: Adicionar política de complexidade de senha aqui
-
-        if not form_errors: # Se todos os checks passaram
+            
+        if not form_errors: 
             try:
                 db = get_db()
                 new_password_hashed = generate_password_hash(new_password)
@@ -440,8 +425,7 @@ def change_password():
             except Exception as e_gen:
                 logger.error(f"Erro geral ao alterar senha para utilizador ID {current_user.id}: {e_gen}", exc_info=True)
                 flash('Ocorreu um erro inesperado ao tentar alterar a senha.', 'error')
-        else: # Se houver form_errors
-            # Flash individual errors if they exist
+        else: 
             for error_field, error_msg in form_errors.items():
                 flash(error_msg, 'error')
             
@@ -450,9 +434,8 @@ def change_password():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    status_sem_cobranca = 'S/ Cobrança' # Status a ser procurado
+    status_sem_cobranca = 'S/ Cobrança' 
     try:
-        # Passar db_name para as funções
         count_pedidos_sem_cobranca = get_count_pedidos_status_especifico(status_sem_cobranca, app.config['DATABASE'])
         placas_sem_cobranca = get_placas_status_especifico(status_sem_cobranca, app.config['DATABASE'])
     except Exception as e:
@@ -465,10 +448,10 @@ def dashboard():
                            placas_sem_cobranca=placas_sem_cobranca,
                            status_filtrado=status_sem_cobranca)
 
-
 # --- CRUD para Cobranças (Melhoria 1) ---
+# ... (Rotas /cobranca/<id>/edit e /cobranca/<id>/delete como definidas anteriormente) ...
 @app.route('/cobranca/<int:cobranca_id>/edit', methods=['GET', 'POST'])
-@login_required # Ou @admin_required se apenas admins puderem editar
+@login_required 
 def edit_cobranca(cobranca_id):
     cobranca = get_cobranca_by_id(cobranca_id, app.config['DATABASE'])
     if not cobranca:
@@ -476,12 +459,7 @@ def edit_cobranca(cobranca_id):
         flash("Cobrança não encontrada.", "error")
         return redirect(url_for('relatorio_cobrancas'))
 
-    # Para obter listas para selects, se necessário (ex: status, filiais)
-    # distinct_status_cobrancas = get_distinct_values('status', 'cobrancas', app.config['DATABASE'])
-    # distinct_filiais_cobrancas = get_distinct_values('filial', 'cobrancas', app.config['DATABASE'])
-
     if request.method == 'POST':
-        # Validar e obter dados do formulário
         data_to_update = {
             'pedido': request.form.get('pedido', cobranca['pedido']).strip(),
             'os': request.form.get('os', cobranca['os']).strip(),
@@ -492,7 +470,6 @@ def edit_cobranca(cobranca_id):
             'status': request.form.get('status', cobranca['status']).strip()
         }
         
-        # Validações básicas (adicionar mais conforme necessário)
         form_valid = True
         if not data_to_update['pedido']:
             flash("O campo 'Pedido' é obrigatório.", "error")
@@ -510,22 +487,13 @@ def edit_cobranca(cobranca_id):
             else:
                 log_audit("EDIT_COBRANCA_FAILURE", f"Falha ao atualizar cobrança ID {cobranca_id}.")
                 flash("Erro ao atualizar cobrança. Verifique se o Pedido/OS já existe para outro registo ou tente novamente.", "error")
-                # Não redirecionar para que o formulário mantenha os dados e mostre erros
-        # Se o formulário não for válido, ou a atualização falhar, renderiza o template novamente com os dados submetidos
-        return render_template('edit_cobranca.html', cobranca=cobranca, form_data=data_to_update) # Passa form_data para repopular
+        return render_template('edit_cobranca.html', cobranca=cobranca, form_data=data_to_update)
 
-    # Para GET request
-    return render_template('edit_cobranca.html', cobranca=cobranca, form_data=cobranca) # form_data inicial é o próprio cobranca
+    return render_template('edit_cobranca.html', cobranca=cobranca, form_data=cobranca)
 
 @app.route('/cobranca/<int:cobranca_id>/delete', methods=['POST'])
-@login_required # Ou @admin_required
+@login_required 
 def delete_cobranca_route(cobranca_id):
-    # CSRF check (se estiver a usar Flask-WTF, ele faria isso automaticamente)
-    # if not request.form.get('csrf_token') == g.get('_csrf_token'):
-    #     log_audit("CSRF_FAILURE_DELETE_COBRANCA", f"Tentativa de apagar cobrança ID {cobranca_id} com token CSRF inválido.")
-    #     flash("Falha na verificação de segurança. Tente novamente.", "error")
-    #     return redirect(url_for('relatorio_cobrancas'))
-
     cobranca = get_cobranca_by_id(cobranca_id, app.config['DATABASE'])
     if not cobranca:
         log_audit("DELETE_COBRANCA_NOT_FOUND", f"Tentativa de apagar cobrança ID {cobranca_id} (não encontrada).")
@@ -541,8 +509,9 @@ def delete_cobranca_route(cobranca_id):
     return redirect(url_for('relatorio_cobrancas'))
 
 # --- CRUD para Pendências (Melhoria 1) ---
+# ... (Rotas /pendencia/<id>/edit e /pendencia/<id>/delete como definidas anteriormente) ...
 @app.route('/pendencia/<int:pendencia_id>/edit', methods=['GET', 'POST'])
-@login_required # Ou @admin_required
+@login_required 
 def edit_pendencia(pendencia_id):
     pendencia = get_pendencia_by_id(pendencia_id, app.config['DATABASE'])
     if not pendencia:
@@ -550,18 +519,12 @@ def edit_pendencia(pendencia_id):
         flash("Pendência não encontrada.", "error")
         return redirect(url_for('relatorio_pendentes'))
 
-    # Para selects no formulário
-    # distinct_status_pend = get_distinct_values('status', 'pendentes', app.config['DATABASE'])
-    # distinct_fornecedores_pend = get_distinct_values('fornecedor', 'pendentes', app.config['DATABASE'])
-    # distinct_filiais_pend = get_distinct_values('filial', 'pendentes', app.config['DATABASE'])
-
-
     if request.method == 'POST':
         data_to_update = {
             'pedido_ref': request.form.get('pedido_ref', pendencia['pedido_ref']).strip(),
             'fornecedor': request.form.get('fornecedor', pendencia['fornecedor']).strip(),
             'filial': request.form.get('filial', pendencia['filial']).strip(),
-            'valor': request.form.get('valor', str(pendencia['valor'])).strip(), # Manter como string para validação
+            'valor': request.form.get('valor', str(pendencia['valor'])).strip(), 
             'status': request.form.get('status', pendencia['status']).strip()
         }
         
@@ -570,21 +533,19 @@ def edit_pendencia(pendencia_id):
             flash("O campo 'Pedido de Referência' é obrigatório.", "error")
             form_valid = False
         
-        # Validação do valor
         try:
             valor_str = data_to_update['valor'].replace('R$', '').strip()
-            if '.' in valor_str and ',' in valor_str: # Ex: 1.234,56
+            if '.' in valor_str and ',' in valor_str: 
                 valor_str = valor_str.replace('.', '')
             valor_str = valor_str.replace(',', '.')
-            data_to_update['valor_float'] = float(valor_str) # Usar um nome diferente para o float
+            data_to_update['valor_float'] = float(valor_str) 
         except ValueError:
             flash("Valor da pendência inválido. Use números (ex: 123,45 ou 123.45).", "error")
             form_valid = False
         
         if form_valid:
-            # Passar o valor já convertido para float para a função de update
             update_payload = data_to_update.copy()
-            update_payload['valor'] = update_payload.pop('valor_float', 0.0) # Usar o valor float
+            update_payload['valor'] = update_payload.pop('valor_float', 0.0) 
 
             success = update_pendencia_db(pendencia_id, update_payload, app.config['DATABASE'])
             if success:
@@ -595,22 +556,14 @@ def edit_pendencia(pendencia_id):
                 log_audit("EDIT_PENDENCIA_FAILURE", f"Falha ao atualizar pendência ID {pendencia_id}.")
                 flash("Erro ao atualizar pendência. Tente novamente.", "error")
         
-        # Se o formulário não for válido ou a atualização falhar
         return render_template('edit_pendencia.html', pendencia=pendencia, form_data=data_to_update)
 
-    # Para GET request
     return render_template('edit_pendencia.html', pendencia=pendencia, form_data=pendencia)
 
 
 @app.route('/pendencia/<int:pendencia_id>/delete', methods=['POST'])
-@login_required # Ou @admin_required
+@login_required 
 def delete_pendencia_route(pendencia_id):
-    # CSRF check
-    # if not request.form.get('csrf_token') == g.get('_csrf_token'):
-    #     log_audit("CSRF_FAILURE_DELETE_PENDENCIA", f"Tentativa de apagar pendência ID {pendencia_id} com token CSRF inválido.")
-    #     flash("Falha na verificação de segurança. Tente novamente.", "error")
-    #     return redirect(url_for('relatorio_pendentes'))
-
     pendencia = get_pendencia_by_id(pendencia_id, app.config['DATABASE'])
     if not pendencia:
         log_audit("DELETE_PENDENCIA_NOT_FOUND", f"Tentativa de apagar pendência ID {pendencia_id} (não encontrada).")
@@ -625,8 +578,8 @@ def delete_pendencia_route(pendencia_id):
             flash("Erro ao apagar pendência.", "error")
     return redirect(url_for('relatorio_pendentes'))
 
-
 # --- Relatórios ---
+# ... (Rotas /relatorio-cobrancas e /relatorio-pendentes como definidas anteriormente) ...
 @app.route('/relatorio-cobrancas')
 @login_required
 def relatorio_cobrancas():
@@ -637,18 +590,16 @@ def relatorio_cobrancas():
         'filial': request.args.get('filtro_filial', '').strip(),
         'placa': request.args.get('filtro_placa', '').strip()
     }
-    # Cria um dicionário apenas com filtros que têm valor
     filtros_ativos_query = {k: v for k, v in filtros_aplicados_form.items() if v}
     
     try:
-        # Passar db_name para as funções
         cobrancas_data = get_cobrancas(filtros=filtros_ativos_query, db_name=app.config['DATABASE'])
         distinct_status = get_distinct_values('status', 'cobrancas', db_name=app.config['DATABASE'])
         distinct_filiais = get_distinct_values('filial', 'cobrancas', db_name=app.config['DATABASE'])
         
         return render_template('relatorio_cobrancas.html',
                                cobrancas=cobrancas_data,
-                               filtros=filtros_aplicados_form, # Passa todos os filtros para repopular o form
+                               filtros=filtros_aplicados_form, 
                                distinct_status=distinct_status,
                                distinct_filiais=distinct_filiais)
     except Exception as e:
@@ -663,22 +614,20 @@ def relatorio_pendentes():
     filtros_aplicados_form = {
         'pedido_ref': request.args.get('filtro_pedido_ref', '').strip(),
         'fornecedor': request.args.get('filtro_fornecedor', '').strip(),
-        'filial_pend': request.args.get('filtro_filial_pend', '').strip(), # Nome do form
-        'status_pend': request.args.get('filtro_status_pend', '').strip(), # Nome do form
+        'filial_pend': request.args.get('filtro_filial_pend', '').strip(), 
+        'status_pend': request.args.get('filtro_status_pend', '').strip(), 
         'valor_min': request.args.get('filtro_valor_min', '').strip(),
         'valor_max': request.args.get('filtro_valor_max', '').strip()
     }
     
     filtros_ativos_query = {}
     for key_form, value in filtros_aplicados_form.items():
-        if value: # Apenas se o filtro tiver valor
-            # Mapear nome do form para nome da coluna no DB, se diferente
+        if value: 
             if key_form == 'filial_pend': filtros_ativos_query['filial'] = value
             elif key_form == 'status_pend': filtros_ativos_query['status'] = value
             else: filtros_ativos_query[key_form] = value
             
     try:
-        # Passar db_name para as funções
         pendentes_data = get_pendentes(filtros=filtros_ativos_query, db_name=app.config['DATABASE'])
         distinct_status_pend = get_distinct_values('status', 'pendentes', db_name=app.config['DATABASE'])
         distinct_fornecedores_pend = get_distinct_values('fornecedor', 'pendentes', db_name=app.config['DATABASE'])
@@ -686,7 +635,7 @@ def relatorio_pendentes():
         
         return render_template('relatorio_pendentes.html',
                                pendentes=pendentes_data,
-                               filtros=filtros_aplicados_form, # Passa todos para repopular o form
+                               filtros=filtros_aplicados_form, 
                                distinct_status_pend=distinct_status_pend,
                                distinct_fornecedores_pend=distinct_fornecedores_pend,
                                distinct_filiais_pend=distinct_filiais_pend)
@@ -698,6 +647,7 @@ def relatorio_pendentes():
 
 
 # --- Rota de Visualização do Log de Auditoria (Admin) ---
+# ... (Rota /admin/audit_log como definida anteriormente) ...
 @app.route('/admin/audit_log')
 @admin_required
 def view_audit_log():
@@ -724,14 +674,13 @@ def view_audit_log():
         query_conditions.append("LOWER(username) LIKE LOWER(?)")
         query_params.append(f"%{filters_form['username']}%")
     if filters_form['ip_address']:
-        query_conditions.append("ip_address LIKE ?") # IP é case-sensitive
+        query_conditions.append("ip_address LIKE ?") 
         query_params.append(f"%{filters_form['ip_address']}%")
 
     sao_paulo_tz = pytz.timezone('America/Sao_Paulo')
 
     if filters_form['date_from']:
         try:
-            # Converte data do formulário (local) para UTC para comparar com o DB
             dt_from_naive = datetime.strptime(filters_form['date_from'], '%Y-%m-%d')
             dt_from_aware_local = sao_paulo_tz.localize(dt_from_naive.replace(hour=0, minute=0, second=0, microsecond=0))
             dt_from_utc = dt_from_aware_local.astimezone(pytz.utc)
@@ -760,13 +709,12 @@ def view_audit_log():
     except sqlite3.Error as e:
         logger.error(f"Erro ao contar logs de auditoria: {e}", exc_info=True)
         flash("Erro ao buscar contagem de logs. Verifique os filtros.", "error")
-        # Não reseta total_logs, pois a query de dados pode funcionar
-
+        
     total_pages = (total_logs + per_page - 1) // per_page
-    if total_pages == 0: total_pages = 1 # Evita divisão por zero
-    if page > total_pages : page = total_pages # Corrige se a página pedida for maior que o total
-    if page < 1 : page = 1 # Garante que a página não seja menor que 1
-    offset = (page - 1) * per_page # Recalcula offset caso 'page' tenha sido corrigido
+    if total_pages == 0: total_pages = 1 
+    if page > total_pages : page = total_pages 
+    if page < 1 : page = 1 
+    offset = (page - 1) * per_page 
 
 
     logs_processed = []
@@ -777,16 +725,15 @@ def view_audit_log():
             {where_clause}
             ORDER BY timestamp DESC
             LIMIT ? OFFSET ?
-        """, (*query_params, per_page, offset)) # Desempacota query_params aqui
+        """, (*query_params, per_page, offset)) 
         logs_data_raw = logs_cursor.fetchall()
 
         for row_data in logs_data_raw:
             log_entry = dict(row_data)
             try:
-                # Timestamp é armazenado como TEXT em UTC no formato 'YYYY-MM-DD HH:MM:SS'
                 dt_utc_from_db = datetime.strptime(log_entry['timestamp'].split('.')[0], '%Y-%m-%d %H:%M:%S').replace(tzinfo=pytz.utc)
                 dt_local = dt_utc_from_db.astimezone(sao_paulo_tz)
-                log_entry['timestamp_fmt'] = dt_local.strftime('%d/%m/%Y %H:%M:%S') # Formato BR para exibição
+                log_entry['timestamp_fmt'] = dt_local.strftime('%d/%m/%Y %H:%M:%S') 
             except Exception as e_ts:
                 logger.warning(f"Erro ao formatar timestamp do log ID {log_entry['id']}: {e_ts}. Valor original: {log_entry['timestamp']}")
                 log_entry['timestamp_fmt'] = str(log_entry['timestamp']) + " (Formato Incorreto)"
@@ -795,43 +742,35 @@ def view_audit_log():
     except sqlite3.Error as e:
         logger.error(f"Erro ao buscar logs de auditoria: {e}", exc_info=True)
         flash("Erro ao buscar logs de auditoria. Verifique os filtros.", "error")
-        # logs_processed já é [] por defeito
-
+        
     return render_template('admin/view_audit_log.html',
                            logs=logs_processed,
                            current_page=page,
                            total_pages=total_pages,
-                           filters=filters_form, # Passa todos os filtros para repopular o form
-                           per_page=per_page, # Para info na página
-                           total_logs=total_logs) # Para info na página
-
+                           filters=filters_form, 
+                           per_page=per_page, 
+                           total_logs=total_logs) 
 
 # --- Geração de PDF ---
 class PDFReport(FPDF):
-    def __init__(self, orientation='L', unit='mm', format='A4', gen_info_str="", page_title="Relatório - Pólis"):
+    def __init__(self, orientation='L', unit='mm', format='A4', gen_info_str="", page_title="Relatório - Pólis", logo_path=None): # Adicionado logo_path
         super().__init__(orientation, unit, format)
         self.gen_info_str = gen_info_str
         self.page_title_text = page_title
+        self.logo_path = logo_path # Guardar o caminho do logótipo
         self.set_left_margin(10)
         self.set_right_margin(10)
-        self.set_auto_page_break(auto=True, margin=15) # Margem inferior para o page break
-        self.font_name = 'Arial' # Default
-        self.font_name_bold = 'Arial' # Default para negrito
-        # Tentar carregar fonte DejaVu para melhor suporte a caracteres
+        self.set_auto_page_break(auto=True, margin=15) 
+        self.font_name = 'Arial' 
+        self.font_name_bold = 'Arial' 
         try:
-            # Assumindo que a pasta 'static' está no mesmo nível que 'app.py'
-            # e 'fonts' está dentro de 'static'
             font_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'fonts')
             regular_font_path = os.path.join(font_dir, 'DejaVuSans.ttf')
-            # bold_font_path = os.path.join(font_dir, 'DejaVuSans-Bold.ttf') # Se tiver a versão Bold separada
-
-            if os.path.exists(regular_font_path): #and os.path.exists(bold_font_path):
+            if os.path.exists(regular_font_path): 
                 self.add_font('DejaVu', '', regular_font_path, uni=True)
-                # Se não tiver DejaVuSans-Bold.ttf, pode usar a regular para negrito (FPDF tentará simular)
-                # ou especificar a mesma fonte para 'B'
-                self.add_font('DejaVu', 'B', regular_font_path, uni=True) # Usar regular para Bold se não houver bold_font_path
+                self.add_font('DejaVu', 'B', regular_font_path, uni=True) 
                 self.font_name = 'DejaVu'
-                self.font_name_bold = 'DejaVu' # Usar 'B' para negrito com DejaVu
+                self.font_name_bold = 'DejaVu' 
                 logger.info(f"Fonte Unicode '{self.font_name}' carregada para PDF de '{regular_font_path}'.")
             else:
                 logger.warning(f"Ficheiro de fonte TTF '{regular_font_path}' não encontrado. Usando Arial para PDF.")
@@ -840,28 +779,47 @@ class PDFReport(FPDF):
 
 
     def header(self):
-        self.set_font(self.font_name_bold, 'B' if self.font_name_bold == 'DejaVu' else '', 14) # 'B' para negrito
+        # Adicionar Logótipo
+        if self.logo_path and os.path.exists(self.logo_path):
+            try:
+                # Posição X, Y, Largura (altura será proporcional ou definida)
+                # Colocar à esquerda, antes do título
+                logo_w = 15 # Largura do logótipo em mm
+                self.image(self.logo_path, x=self.l_margin, y=8, w=logo_w)
+                # Ajustar a posição X do título para dar espaço ao logótipo
+                title_x_offset = self.l_margin + logo_w + 5 # 5mm de espaço entre logo e título
+            except Exception as e_logo_pdf:
+                logger.error(f"Erro ao adicionar logótipo ao PDF: {e_logo_pdf}")
+                title_x_offset = self.l_margin # Fallback se o logo falhar
+        else:
+            if self.logo_path: logger.warning(f"Ficheiro de logótipo para PDF não encontrado em: {self.logo_path}")
+            title_x_offset = self.l_margin
+
+        self.set_font(self.font_name_bold, 'B' if self.font_name_bold == 'DejaVu' else '', 14) 
+        
+        # Título
+        # Calcula a largura disponível para o título (página - margens - espaço do logo se existir)
+        available_width_for_title = self.w - title_x_offset - self.r_margin
         title_w = self.get_string_width(self.page_title_text) + 6
-        page_w = self.w - self.l_margin - self.r_margin
-        self.set_x((page_w - title_w) / 2 + self.l_margin) # Centralizar título
+        
+        # Centralizar o título no espaço disponível restante
+        self.set_x(title_x_offset + (available_width_for_title - title_w) / 2)
         self.cell(title_w, 10, self.page_title_text, 0, 1, 'C')
-        self.ln(4) # Espaço após o título
+        self.ln(4) 
 
     def footer(self):
-        self.set_y(-15) # Posição a 1.5 cm do fim
-        self.set_font(self.font_name, 'I', 8) # Fonte itálica para rodapé
-        # Número da página
-        page_num_text = f'Página {self.page_no()}/{{nb}}' # {nb} é um alias para o número total de páginas
+        self.set_y(-15) 
+        self.set_font(self.font_name, 'I', 8) 
+        page_num_text = f'Página {self.page_no()}/{{nb}}' 
         self.cell(0, 10, page_num_text, 0, 0, 'C')
-        # Informação de geração à esquerda
-        self.set_xy(self.l_margin, -15) # Reset X para alinhar à esquerda
+        self.set_xy(self.l_margin, -15) 
         self.cell(0, 10, self.gen_info_str, 0, 0, 'L')
 
 
     def section_title(self, title):
         self.set_font(self.font_name_bold, 'B' if self.font_name_bold == 'DejaVu' else '', 11)
-        self.set_fill_color(230, 230, 230) # Cinza claro para fundo do título da secção
-        self.cell(0, 7, title, 0, 1, 'L', True) # True para preencher o fundo
+        self.set_fill_color(230, 230, 230) 
+        self.cell(0, 7, title, 0, 1, 'L', True) 
         self.ln(3)
 
     def section_body(self, text_lines_list):
@@ -871,68 +829,57 @@ class PDFReport(FPDF):
         self.ln(2)
 
     def print_table(self, header_cols, data_rows_list, col_widths_list):
-        # Cabeçalho da tabela
-        self.set_font(self.font_name_bold, 'B' if self.font_name_bold == 'DejaVu' else '', 7.5) # Fonte negrito para cabeçalho
-        self.set_fill_color(220, 220, 220) # Cinza um pouco mais escuro para cabeçalho
-        self.set_line_width(0.2) # Espessura da linha da borda
-        self.set_draw_color(180, 180, 180) # Cor da borda da célula
+        self.set_font(self.font_name_bold, 'B' if self.font_name_bold == 'DejaVu' else '', 7.5) 
+        self.set_fill_color(220, 220, 220) 
+        self.set_line_width(0.2) 
+        self.set_draw_color(180, 180, 180) 
         for i, col_name in enumerate(header_cols):
-            self.cell(col_widths_list[i], 7, str(col_name), 1, 0, 'C', True) # Borda=1, Preenchimento=True
+            self.cell(col_widths_list[i], 7, str(col_name), 1, 0, 'C', True) 
         self.ln()
 
-        # Dados da tabela
-        self.set_font(self.font_name, '', 7) # Fonte normal para dados
-        fill_row = False # Para alternar cor de fundo das linhas
+        self.set_font(self.font_name, '', 7) 
+        fill_row = False 
         for row_data in data_rows_list:
-            # Verificar se precisa de nova página ANTES de desenhar a linha
-            # A altura da linha pode variar se houver multi_cell. Usar uma altura base.
             row_base_height = 6 
             if self.get_y() + row_base_height > self.page_break_trigger:
                 self.add_page(self.cur_orientation)
-                # Redesenhar cabeçalho da tabela na nova página
                 self.set_font(self.font_name_bold, 'B' if self.font_name_bold == 'DejaVu' else '', 7.5)
                 self.set_fill_color(220, 220, 220)
                 for i, col_name in enumerate(header_cols):
                     self.cell(col_widths_list[i], 7, str(col_name), 1, 0, 'C', True)
                 self.ln()
-                self.set_font(self.font_name, '', 7) # Resetar fonte para dados
+                self.set_font(self.font_name, '', 7) 
 
-            current_fill_color = (245, 245, 245) if fill_row else (255, 255, 255) # Cor de preenchimento da linha
+            current_fill_color = (245, 245, 245) if fill_row else (255, 255, 255) 
             self.set_fill_color(*current_fill_color)
 
-            # Determinar a altura máxima da linha (para multi_cell)
-            # Esta é uma abordagem simplificada. FPDF não tem um "get_multi_cell_height" direto.
             max_h = row_base_height
             for i, item_val in enumerate(row_data):
                 item_str = str(item_val if item_val is not None else 'N/A')
                 col_width = col_widths_list[i]
-                # Calcular número de linhas que o texto ocuparia (aproximado)
-                # A altura da fonte é aproximadamente self.font_size_pt / 72 * 25.4 (para mm)
-                # Aqui, usamos uma heurística baseada na altura da célula (4mm por linha de texto)
                 num_lines = len(self.multi_cell(col_width - 2, 4, item_str, 0, 'L', split_only=True))
-                max_h = max(max_h, num_lines * 4 + 2) # 4mm por linha + padding
+                max_h = max(max_h, num_lines * 4 + 2) 
 
-            # Desenhar as células da linha com a altura máxima calculada
             y_before_row = self.get_y()
             for i, item_val in enumerate(row_data):
                 item_str = str(item_val if item_val is not None else 'N/A')
                 col_width = col_widths_list[i]
-                align = 'R' if header_cols[i].lower() == "valor" else 'L' # Alinhar valor à direita
+                align = 'R' if header_cols[i].lower() == "valor" else 'L' 
                 
                 x_pos = self.get_x()
-                self.rect(x_pos, y_before_row, col_width, max_h, 'DF') # Desenha o rect e preenche
+                self.rect(x_pos, y_before_row, col_width, max_h, 'DF') 
 
-                # Adicionar padding manual para multi_cell dentro do rect
                 padding_x = 1
-                padding_y = (max_h - (num_lines * 4 if num_lines > 0 else 4) ) / 2 # Centralizar verticalmente (aprox)
-                padding_y = max(1, padding_y) # Mínimo de 1mm de padding y
+                num_lines_for_cell = len(self.multi_cell(col_width - (2 * padding_x), 4, item_str, 0, 'L', split_only=True))
+                padding_y = (max_h - (num_lines_for_cell * 4) ) / 2 
+                padding_y = max(1, padding_y) 
 
                 self.set_xy(x_pos + padding_x, y_before_row + padding_y)
-                self.multi_cell(col_width - (2 * padding_x), 4, item_str, 0, align, False) # False para não preencher de novo
-                self.set_xy(x_pos + col_width, y_before_row) # Mover para o início da próxima célula na mesma linha Y
+                self.multi_cell(col_width - (2 * padding_x), 4, item_str, 0, align, False) 
+                self.set_xy(x_pos + col_width, y_before_row) 
 
-            self.ln(max_h) # Mover para a próxima linha
-            fill_row = not fill_row # Alternar cor de preenchimento
+            self.ln(max_h) 
+            fill_row = not fill_row 
 
 def get_filters_as_text_list_for_pdf_pendentes(filtros_aplicados_form_dict):
     """Converte o dicionário de filtros aplicados numa lista de strings para o PDF."""
@@ -941,15 +888,14 @@ def get_filters_as_text_list_for_pdf_pendentes(filtros_aplicados_form_dict):
         key_map_display = {
             'pedido_ref': 'Pedido Ref.',
             'fornecedor': 'Fornecedor',
-            'filial_pend': 'Filial', # Nome usado no formulário HTML
-            'status_pend': 'Status', # Nome usado no formulário HTML
+            'filial_pend': 'Filial', 
+            'status_pend': 'Status', 
             'valor_min': 'Valor Mínimo',
             'valor_max': 'Valor Máximo'
         }
         for key_form, value in filtros_aplicados_form_dict.items():
-            if value: # Somente se o filtro tiver valor
+            if value: 
                 display_key = key_map_display.get(key_form, key_form.replace("_", " ").title())
-                # Formatar valor se for monetário
                 value_display = format_currency_filter(value) if 'valor' in key_form else value
                 lines.append(f"{display_key}: {value_display}")
     
@@ -959,7 +905,6 @@ def get_filters_as_text_list_for_pdf_pendentes(filtros_aplicados_form_dict):
 @app.route('/relatorio-pendentes/imprimir')
 @login_required
 def imprimir_relatorio_pendentes():
-    # Obter filtros da query string (passados pelo botão "Imprimir")
     filtros_aplicados_pdf_form = {
         'pedido_ref': request.args.get('filtro_pedido_ref', '').strip(),
         'fornecedor': request.args.get('filtro_fornecedor', '').strip(),
@@ -969,10 +914,9 @@ def imprimir_relatorio_pendentes():
         'valor_max': request.args.get('filtro_valor_max', '').strip()
     }
     
-    # Mapear filtros do form para filtros da query do DB (se os nomes forem diferentes)
     filtros_ativos_query_pdf = {}
     for key_form, value in filtros_aplicados_pdf_form.items():
-        if value: # Apenas se o filtro tiver valor
+        if value: 
             if key_form == 'filial_pend': filtros_ativos_query_pdf['filial'] = value
             elif key_form == 'status_pend': filtros_ativos_query_pdf['status'] = value
             else: filtros_ativos_query_pdf[key_form] = value
@@ -980,23 +924,24 @@ def imprimir_relatorio_pendentes():
     try:
         pendentes_data_raw = get_pendentes(filtros=filtros_ativos_query_pdf, db_name=app.config['DATABASE'])
         
-        now_local_tz = pytz.timezone('America/Sao_Paulo') # Fuso horário de São Paulo
+        now_local_tz = pytz.timezone('America/Sao_Paulo') 
         now_local = datetime.now(now_local_tz)
         gen_info_str = f"Gerado em: {now_local.strftime('%d/%m/%Y %H:%M:%S')} por {current_user.username}"
 
-        pdf = PDFReport(orientation='L', gen_info_str=gen_info_str, page_title="Relatório de Pendências - Pólis")
-        pdf.alias_nb_pages() # Para ter o número total de páginas no rodapé
+        # Caminho para o logótipo
+        logo_path_pdf = os.path.join(app.static_folder, 'images', 'polis_logo.png')
+
+
+        pdf = PDFReport(orientation='L', gen_info_str=gen_info_str, page_title="Relatório de Pendências - Pólis", logo_path=logo_path_pdf) # Passa o caminho do logótipo
+        pdf.alias_nb_pages() 
         pdf.add_page()
 
-        # Adicionar filtros aplicados ao PDF
         filter_text_lines = get_filters_as_text_list_for_pdf_pendentes(filtros_aplicados_pdf_form)
         pdf.section_title("Filtros Aplicados")
         pdf.section_body(filter_text_lines)
 
-        # Cabeçalhos e larguras das colunas para o PDF (ajustar conforme necessário para paisagem A4)
         header_cols_pdf = ["Pedido Ref.", "Fornecedor", "Filial", "Valor", "Status", "Importado em"]
-        # A4 paisagem: ~297mm largura. Margens 10mm+10mm = 20mm. Área útil ~277mm.
-        col_widths_pdf = [45, 65, 45, 30, 35, 37] # Total ~257mm, ajustar para caber
+        col_widths_pdf = [45, 65, 45, 30, 35, 37] 
 
         table_data_for_pdf = []
         if pendentes_data_raw:
@@ -1005,21 +950,19 @@ def imprimir_relatorio_pendentes():
                     row_obj['pedido_ref'],
                     row_obj['fornecedor'],
                     row_obj['filial'],
-                    format_currency_filter(row_obj['valor']), # Formatar valor como moeda
+                    format_currency_filter(row_obj['valor']), 
                     row_obj['status'],
-                    row_obj['data_importacao_fmt'] # Usar o formato já pronto do get_pendentes
+                    row_obj['data_importacao_fmt'] 
                 ])
         
         pdf.section_title("Dados das Pendências")
         if table_data_for_pdf:
             pdf.print_table(header_cols_pdf, table_data_for_pdf, col_widths_pdf)
         else:
-            pdf.set_font(pdf.font_name, 'I', 10) # Fonte itálica para mensagem
+            pdf.set_font(pdf.font_name, 'I', 10) 
             pdf.cell(0, 10, "Nenhuma pendência encontrada com os filtros aplicados.", 0, 1, 'C')
         
-        # Gerar o PDF em memória
         pdf_output_bytes = pdf.output(dest='S')
-        # FPDF pode retornar string em Python 2, garantir bytes para Python 3
         if isinstance(pdf_output_bytes, str):
              pdf_output_bytes = pdf_output_bytes.encode('latin-1') 
 
@@ -1034,20 +977,14 @@ def imprimir_relatorio_pendentes():
         logger.error(f"Erro ao gerar PDF de pendências: {e}", exc_info=True)
         log_audit("PDF_PENDENCIAS_ERROR", f"Erro: {e}, Filtros: {filtros_aplicados_pdf_form}")
         flash("Erro ao gerar o relatório em PDF.", "error")
-        # Redirecionar de volta para a página de relatório com os filtros
-        return redirect(url_for('relatorio_pendentes', **filtros_aplicados_pdf_form))
+        return redirect(url_for('relatorio_pendentes', **filtros_aplicados_pdf_form)) 
 
 
-# --- CSRF Dummy (Substituir por Flask-WTF em produção) ---
+# --- CSRF Dummy ---
 @app.context_processor
 def utility_processor():
     def dummy_csrf_token():
-        # Em produção, use Flask-WTF ou similar para tokens CSRF reais
-        # Este é um placeholder muito simples e NÃO SEGURO para produção.
         if '_csrf_token' not in g:
-            # Gera um token "aleatório" para a duração da request, se não existir
-            # Não é persistente entre requests para o mesmo utilizador, o que o torna ineficaz
-            # para proteção real contra CSRF em formulários POST.
             g._csrf_token = os.urandom(24).hex() 
         return g._csrf_token
     return dict(csrf_token=dummy_csrf_token)
@@ -1055,16 +992,13 @@ def utility_processor():
 # --- Ponto de Entrada da Aplicação ---
 if __name__ == '__main__':
     db_path = app.config['DATABASE']
-    # Verificar se o banco de dados existe, se não, instruir para executar o setup
     if not os.path.exists(db_path):
         setup_script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'utils', 'database_setup.py')
         logger.critical(f"AVISO: Banco de dados '{db_path}' não encontrado.")
         logger.critical(f"Execute 'python {setup_script_path}' para criar o banco de dados e as tabelas.")
-        # Poderia até tentar executar o setup aqui, mas é melhor ser explícito.
     else:
         logger.info(f"Banco de dados encontrado em: {db_path}")
 
     is_debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true' or app.debug
     logger.info(f"Iniciando Pólis em modo DEBUG={is_debug_mode} (PID: {os.getpid()})")
-    # Para desenvolvimento, debug=True é útil. Para produção, use um servidor WSGI como Gunicorn ou Waitress.
     app.run(debug=is_debug_mode, host='0.0.0.0', port=5000)
