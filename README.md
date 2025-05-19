@@ -11,6 +11,6 @@ Este projeto tem a finalidade de fins proffisionais para a apresentação de dad
 ----
 ### Developer 
 
-🧠 João Pedro Marques
+🧠 [João Pedro Marques](https://github.com/Mativis/Portif-lio/blob/main/README.md)
 
 [LinkedIn](https://www.linkedin.com/in/joao-mativi-8a265829a/)
