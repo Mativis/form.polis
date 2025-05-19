@@ -4,9 +4,6 @@
 
 {% block content %}
 <div class="home-hero">
-    {# O título principal e subtítulo podem vir do tema ou serem fixos aqui #}
-    {# Se o logótipo do header for suficiente, pode remover este logótipo central #}
-    {# <img src="{{ url_for('static', filename='images/polis_logo.png') }}" alt="Logótipo Pólis Central" class="home-hero-logo"> #}
     <h2 class="home-hero-title">PÓLIS GESTÃO INTELIGENTE</h2>
     <p class="home-hero-subtitle">Sistema de Monitoramento e Análise de Dados.</p>
 </div>
@@ -14,7 +11,7 @@
 <div class="home-actions-grid">
     <div class="action-card">
         <div class="action-card-icon">
-            <i class="fas fa-database fa-3x"></i> {# Ícone para Inserir Dados #}
+            <i class="fas fa-database fa-3x"></i>
         </div>
         <h3 class="action-card-title">Inserção de Dados</h3>
         <p class="action-card-description">Importe e processe dados de cobranças e pendências diretamente no sistema com precisão.</p>
@@ -25,7 +22,7 @@
 
     <div class="action-card">
         <div class="action-card-icon">
-            <i class="fas fa-chart-line fa-3x"></i> {# Ícone para Relatórios/Dashboard #}
+            <i class="fas fa-chart-line fa-3x"></i>
         </div>
         <h3 class="action-card-title">Relatórios e Análises</h3>
         <p class="action-card-description">Consulte, filtre e analise os dados cadastrados de forma dinâmica e eficiente.</p>
@@ -34,15 +31,6 @@
         </a>
     </div>
 </div>
-
-{# Opcional: Botão de Suporte como na referência #}
-{# 
-<div class="support-button-container">
-    <a href="https://wa.me/SEUNUMERODOWHATSAPP" class="btn btn-success btn-lg" target="_blank">
-        <i class="fab fa-whatsapp"></i> Suporte via WhatsApp
-    </a>
-</div> 
-#}
 {% endblock %}
 
 {% block head_extra %}
@@ -52,18 +40,11 @@
         text-align: center;
         padding: 3rem 1rem;
         margin-bottom: 2rem;
-        /* Pode adicionar um gradiente de fundo aqui se a imagem do body não for desejada nesta página específica */
-        /* background: linear-gradient(to bottom, var(--accent-color-light), var(--bg-color)); */
-        /* border-radius: var(--border-radius-base); */
-    }
-    .home-hero-logo {
-        max-width: 180px; /* Ajuste conforme o seu logo central */
-        margin-bottom: 1.5rem;
     }
     .home-hero-title {
-        font-size: 2.75rem; /* Maior */
+        font-size: 2.75rem; 
         font-weight: 700;
-        color: var(--accent-color); /* Cor de destaque */
+        color: var(--accent-color); 
         margin-bottom: 0.75rem;
     }
     .home-hero-subtitle {
@@ -74,14 +55,12 @@
         margin-left: auto;
         margin-right: auto;
     }
-
     .home-actions-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Responsivo */
-        gap: 2rem; /* Espaçamento entre os cartões */
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
+        gap: 2rem; 
         margin-bottom: 3rem;
     }
-
     .action-card {
         background-color: var(--card-bg);
         border-radius: var(--border-radius-base);
@@ -97,35 +76,10 @@
         transform: translateY(-5px);
         box-shadow: var(--card-hover-box-shadow);
     }
-    .action-card-icon {
-        color: var(--accent-color);
-        margin-bottom: 1.5rem;
-    }
-    .action-card-icon .fas, .action-card-icon .fab {
-        font-size: 3rem; /* Ícones maiores */
-    }
-    .action-card-title {
-        font-size: 1.5rem;
-        color: var(--text-color);
-        margin-bottom: 0.75rem;
-        font-weight: 600;
-    }
-    .action-card-description {
-        font-size: 0.95rem;
-        color: var(--text-muted-color);
-        margin-bottom: 1.5rem;
-        flex-grow: 1; /* Para alinhar botões em baixo se descrições tiverem tamanhos diferentes */
-    }
-    .action-card-button.btn-lg {
-        padding: 0.75rem 1.5rem;
-        font-size: 1rem;
-        width: 80%; /* Botões com largura definida */
-        max-width: 250px;
-    }
-    .support-button-container {
-        text-align: center;
-        margin-top: 2rem;
-        margin-bottom: 2rem;
-    }
+    .action-card-icon { color: var(--accent-color); margin-bottom: 1.5rem; }
+    .action-card-icon .fas { font-size: 3rem; }
+    .action-card-title { font-size: 1.5rem; color: var(--text-color); margin-bottom: 0.75rem; font-weight: 600; }
+    .action-card-description { font-size: 0.95rem; color: var(--text-muted-color); margin-bottom: 1.5rem; flex-grow: 1; }
+    .action-card-button.btn-lg { padding: 0.75rem 1.5rem; font-size: 1rem; width: 80%; max-width: 250px; }
 </style>
 {% endblock %}

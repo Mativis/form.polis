@@ -5,16 +5,10 @@
 {% block content %}
 <div class="login-container">
     <div class="login-card">
-        {# Se quiser o logo centralizado acima do card de login como na referência TRANSAC #}
-        {# <img src="{{ url_for('static', filename='images/polis_logo.png') }}" alt="Logótipo Pólis" class="login-card-logo"> #}
-        
         <div class="login-card-header">
             <h3 class="login-card-title"><i class="fas fa-lock"></i> Acesso ao Sistema Pólis</h3>
         </div>
         <div class="login-card-body">
-            {# Flash messages específicas para o formulário de login podem ser colocadas aqui se desejar #}
-            {# {% with messages = get_flashed_messages(with_categories=true, category_filter=['error', 'info']) %} ... {% endwith %} #}
-
             <form method="POST" action="{{ url_for('login') }}" novalidate>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
@@ -38,19 +32,11 @@
                                placeholder="Sua senha" required>
                     </div>
                 </div>
-                {# Opcional: Checkbox "Lembrar-me" #}
-                {# <div class="form-group form-check">
-                    <input type="checkbox" class="form-check-input" id="remember" name="remember">
-                    <label class="form-check-label" for="remember">Lembrar-me</label>
-                </div> #}
                 <button type="submit" class="btn btn-primary btn-block btn-lg mt-4">
                     <i class="fas fa-sign-in-alt"></i> Entrar
                 </button>
             </form>
         </div>
-        {# <div class="login-card-footer">
-            <p><a href="#">Esqueceu a senha?</a></p>
-        </div> #}
     </div>
 </div>
 {% endblock %}
@@ -58,81 +44,45 @@
 {% block head_extra %}
 {{ super() }}
 <style>
-    /* Remover o fundo do body para a página de login ter o fundo da imagem global */
-    /* Se quiser um fundo específico apenas para login, descomente e ajuste: */
-    /*
-    body.login-page-background {
-        background-color: var(--bg-color); 
-        background-image: none; 
-    }
-    body.login-page-background::before {
-        background-color: transparent;
-    }
-    */
-
     .login-container {
         display: flex;
         justify-content: center;
         align-items: center;
-        min-height: calc(100vh - 100px); /* Ajustar altura se o header/footer forem diferentes */
+        min-height: calc(100vh - 120px); /* Ajustar se header/footer mudarem muito */
         padding: 2rem 1rem;
-        width: 100%; /* Para ocupar a largura no .centered-content-container */
+        width: 100%;
     }
     .login-card {
         background-color: var(--card-bg);
         border-radius: var(--border-radius-base);
         box-shadow: var(--card-box-shadow);
         width: 100%;
-        max-width: 450px; /* Largura do cartão de login */
-        overflow: hidden; /* Para que o header do cartão respeite o border-radius */
-    }
-    .login-card-logo {
-        display: block;
-        max-width: 150px;
-        margin: 2rem auto 1rem auto;
+        max-width: 450px;
+        overflow: hidden;
     }
     .login-card-header {
-        background-color: var(--accent-color); /* Header do cartão com cor de destaque */
+        background-color: var(--accent-color);
         padding: 1.5rem;
         text-align: center;
     }
     .login-card-title {
-        color: var(--btn-text-color); /* Texto branco no header do cartão */
+        color: var(--btn-text-color); 
         font-size: 1.5rem;
         margin-bottom: 0;
         font-weight: 600;
     }
-    .login-card-title .fas {
-        margin-right: 0.5rem;
-    }
-    .login-card-body {
-        padding: 2rem 2.5rem; /* Mais padding interno */
-    }
-    .input-group-text { /* Ajuste do input-group para o novo design */
+    .login-card-title .fas { margin-right: 0.5rem; }
+    .login-card-body { padding: 2rem 2.5rem; }
+    .input-group-text {
         background-color: var(--accent-color-light);
         border-color: var(--input-border-color);
         color: var(--accent-color);
     }
     html[data-theme$="-dark"] .input-group-text {
-        background-color: var(--input-bg); /* Usar o fundo do input no dark mode */
+        background-color: var(--input-bg);
         border-color: var(--input-border-color);
         color: var(--accent-color);
     }
-    .login-card .btn-lg { /* Botão de login maior */
-        padding: 0.75rem 1.5rem;
-        font-size: 1.125rem;
-    }
-    .login-card-footer {
-        background-color: var(--card-header-bg);
-        padding: 1rem;
-        text-align: center;
-        font-size: 0.875rem;
-    }
-    .login-card-footer a {
-        color: var(--link-color);
-    }
+    .login-card .btn-lg { padding: 0.75rem 1.5rem; font-size: 1.125rem; }
 </style>
 {% endblock %}
-
-{# Adicionar uma classe ao body se quiser um fundo específico para a página de login #}
-{# {% block body_attributes %}class="login-page-background"{% endblock %} #}

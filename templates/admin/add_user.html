@@ -1,44 +1,45 @@
 {% extends "base.html" %}
 
-{% block title %}Adicionar Usuário{% endblock %}
+{% block title %}Adicionar Utilizador{% endblock %}
 
 {% block content %}
-    <h2 class="page-title"><i class="fas fa-user-cog"></i> Adicionar Novo Usuário</h2>
+    <h2 class="page-title"><i class="fas fa-user-cog"></i> Adicionar Novo Utilizador</h2>
     <div class="row justify-content-center">
-        <div class="col-md-8 col-lg-6">
+        <div class="col-md-8 col-lg-6"> {# Centraliza o card #}
             <div class="card">
                 <div class="card-header">
-                     <h3 class="mb-0">Detalhes do Usuário</h3>
+                     <h3 class="mb-0">Detalhes do Utilizador</h3>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('add_user_admin') }}" novalidate>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="form-group">
-                            <label for="username">Nome de Usuário:</label>
+                            <label for="username">Nome de Utilizador:</label>
                             <input type="text" id="username" name="username" 
-                                   class="form-control {% if form_errors and form_errors.username %}error{% endif %}" 
+                                   class="form-control {% if form_errors and form_errors.username %}is-invalid{% endif %}" 
                                    value="{{ username or '' }}" required autofocus>
                             {% if form_errors and form_errors.username %}
-                                <small class="form-error-text">{{ form_errors.username }}</small>
+                                <div class="invalid-feedback">{{ form_errors.username }}</div>
                             {% endif %}
                         </div>
                         <div class="form-group">
                             <label for="password">Senha:</label>
                             <input type="password" id="password" name="password" 
-                                   class="form-control {% if form_errors and form_errors.password %}error{% endif %}" required>
+                                   class="form-control {% if form_errors and form_errors.password %}is-invalid{% endif %}" required>
                             {% if form_errors and form_errors.password %}
-                                <small class="form-error-text">{{ form_errors.password }}</small>
+                                <div class="invalid-feedback">{{ form_errors.password }}</div>
                             {% endif %}
                         </div>
                         <div class="form-group">
                             <label for="confirm_password">Confirmar Senha:</label>
                             <input type="password" id="confirm_password" name="confirm_password" 
-                                   class="form-control {% if form_errors and form_errors.confirm_password %}error{% endif %}" required>
+                                   class="form-control {% if form_errors and form_errors.confirm_password %}is-invalid{% endif %}" required>
                             {% if form_errors and form_errors.confirm_password %}
-                                <small class="form-error-text">{{ form_errors.confirm_password }}</small>
+                                <div class="invalid-feedback">{{ form_errors.confirm_password }}</div>
                             {% endif %}
                         </div>
-                        <div class="mt-3"> {# Spacing for buttons #}
-                            <button type="submit" class="btn btn-primary"><i class="fas fa-plus-circle"></i> Adicionar Usuário</button>
+                        <div class="mt-4"> {# Aumentar espaçamento para botões #}
+                            <button type="submit" class="btn btn-primary"><i class="fas fa-plus-circle"></i> Adicionar Utilizador</button>
                             <a href="{{ url_for('home') }}" class="btn btn-secondary"><i class="fas fa-ban"></i> Cancelar</a>
                         </div>
                     </form>
@@ -49,13 +50,28 @@
 {% endblock %}
 
 {% block head_extra %}
+{{ super() }}
 <style>
-    .row.justify-content-center {
-      /* min-height: 60vh; */ /* Optional: to center card if content is short */
-      /* display: flex; */
-      /* align-items: center; */
+    /* Para que .is-invalid funcione como esperado (Bootstrap-like) */
+    .form-control.is-invalid {
+        border-color: var(--flash-error-border-L); /* Usar a cor de erro do tema */
     }
-    .mt-3 { margin-top: 1rem !important; }
-    .mb-0 { margin-bottom: 0 !important; }
+    html[data-theme$="-dark"] .form-control.is-invalid {
+        border-color: var(--flash-error-border-D);
+    }
+    .invalid-feedback {
+        display: none; /* Escondido por defeito */
+        width: 100%;
+        margin-top: .25rem;
+        font-size: .875em;
+        color: var(--flash-error-text-L); /* Usar a cor de erro do tema */
+    }
+    html[data-theme$="-dark"] .invalid-feedback {
+        color: var(--flash-error-text-D);
+    }
+    .form-control.is-invalid ~ .invalid-feedback {
+        display: block; /* Mostra se o input tiver .is-invalid */
+    }
+    .row.justify-content-center { display: flex; justify-content: center; } /* Para centralizar o col-md-.. */
 </style>
 {% endblock %}

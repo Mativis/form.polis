@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-br" data-theme="azul-transac-light"> {# Novo tema padrão #}
+<html lang="pt-br" data-theme="azul-transac-light"> {# Tema padrão: Azul Transac - Claro #}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -27,9 +27,8 @@
 </head>
 <body>
     <header class="app-header">
-        <div class="app-header-content container"> {# Adicionado .container para alinhar com o conteúdo principal #}
+        <div class="app-header-content container">
             <div class="app-header-brand">
-                {# Logótipo como imagem #}
                 <img src="{{ url_for('static', filename='images/polis_logo.png') }}" alt="Logótipo Pólis" class="app-logo-img">
                 <h1>Pólis</h1>
             </div>
@@ -74,13 +73,12 @@
 
     {% if current_user.is_authenticated %}
     <nav class="main-nav">
-        <div class="main-nav-links container"> {# Adicionado .container para alinhar #}
+        <div class="main-nav-links container">
             <a href="{{ url_for('home') }}" class="nav-item {{ 'active' if request.endpoint == 'home' else '' }}"><i class="fas fa-home"></i> Home</a>
             <a href="{{ url_for('dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'dashboard' else '' }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
             <a href="{{ url_for('inserir_dados') }}" class="nav-item {{ 'active' if request.endpoint == 'inserir_dados' else '' }}"><i class="fas fa-file-upload"></i> Inserir Dados</a>
             <a href="{{ url_for('relatorio_cobrancas') }}" class="nav-item {{ 'active' if request.endpoint == 'relatorio_cobrancas' else '' }}"><i class="fas fa-file-invoice-dollar"></i> Rel. Cobranças</a>
             <a href="{{ url_for('relatorio_pendentes') }}" class="nav-item {{ 'active' if request.endpoint == 'relatorio_pendentes' else '' }}"><i class="fas fa-clipboard-list"></i> Rel. Pendentes</a>
-            {# Links de admin e conta movidos para um possível dropdown no futuro ou mantidos aqui #}
             <div class="nav-item-group-right">
                 <a href="{{ url_for('change_password') }}" class="nav-item {{ 'active' if request.endpoint == 'change_password' else '' }}"><i class="fas fa-user-shield"></i> Alterar Senha</a>
                 {% if current_user.username in ADMIN_USERNAMES %}
@@ -92,7 +90,7 @@
     </nav>
     {% endif %}
 
-    <main class="container content-wrapper"> {# content-wrapper para espaçamento do footer fixo #}
+    <main class="container content-wrapper">
         {% block before_flash_messages %}{% endblock %}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -129,7 +127,7 @@
 
             let preferredTheme = localStorage.getItem(storageKey);
             if (!preferredTheme) {
-                const defaultBaseTheme = 'azul-transac'; // Novo tema padrão
+                const defaultBaseTheme = 'azul-transac'; 
                 if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
                     preferredTheme = defaultBaseTheme + '-dark';
                 } else {

@@ -59,101 +59,87 @@
         </div>
     </div>
 
-    <div class="table-responsive">
-        {% if pendentes %}
-            <table class="table table-striped table-hover">
-                <thead>
-                    <tr>
-                        {# <th class="col-id">ID DB</th> #} {# ID do DB pode ser útil para debug, mas opcional para o utilizador #}
-                        <th>Pedido Ref.</th>
-                        <th>Fornecedor</th>
-                        <th>Filial</th>
-                        <th class="col-valor">Valor</th>
-                        <th class="col-status">Status</th>
-                        <th class="col-date">Importado em</th>
-                        <th class="col-actions text-center">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for pendencia in pendentes %}
-                    <tr>
-                        {# <td>{{ pendencia.id }}</td> #}
-                        <td>{{ pendencia.pedido_ref | default('N/A') }}</td>
-                        <td>{{ pendencia.fornecedor | default('N/A') }}</td>
-                        <td>{{ pendencia.filial | default('N/A') }}</td>
-                        <td class="cell-valor">{{ pendencia.valor | format_currency }}</td>
-                        <td class="cell-status">
-                            <span class="badge status-{{ pendencia.status | lower | replace(' ', '-') | default('desconhecido') | normalize_css }}">
-                                {{ pendencia.status | default('N/A') }}
-                            </span>
-                        </td>
-                        <td class="cell-date">{{ pendencia.data_importacao_fmt | default('N/A') }}</td> {# Utiliza a data formatada do backend #}
-                        <td class="cell-actions text-center">
-                            <a href="{{ url_for('edit_pendencia', pendencia_id=pendencia.id) }}" class="btn btn-sm btn-info" title="Editar">
-                                <i class="fas fa-edit"></i>
-                            </a>
-                            <form method="POST" action="{{ url_for('delete_pendencia_route', pendencia_id=pendencia.id) }}" style="display: inline-block;" onsubmit="return confirm('Tem a certeza que deseja apagar esta pendência? Esta ação não pode ser desfeita.');">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"> {# Para proteção CSRF #}
-                                <button type="submit" class="btn btn-sm btn-danger" title="Apagar">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-        <div class="card no-data-message">
-            <div class="card-body">
-                <i class="fas fa-folder-open"></i>
-                Nenhuma pendência encontrada com os filtros aplicados ou não há pendências registadas.
+    <div class="card"> {# Envolver a tabela num card #}
+        <div class="card-body table-responsive-container"> {# Para padding e responsividade da tabela #}
+            {% if pendentes %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Pedido Ref.</th>
+                                <th>Fornecedor</th>
+                                <th>Filial</th>
+                                <th class="col-valor">Valor</th>
+                                <th class="col-status">Status</th>
+                                <th class="col-date">Importado em</th>
+                                <th class="col-actions text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pendencia in pendentes %}
+                            <tr>
+                                <td>{{ pendencia.pedido_ref | default('N/A') }}</td>
+                                <td>{{ pendencia.fornecedor | default('N/A') }}</td>
+                                <td>{{ pendencia.filial | default('N/A') }}</td>
+                                <td class="cell-valor">{{ pendencia.valor | format_currency }}</td>
+                                <td class="cell-status">
+                                    <span class="badge status-{{ pendencia.status | lower | replace(' ', '-') | default('desconhecido') | normalize_css }}">
+                                        {{ pendencia.status | default('N/A') }}
+                                    </span>
+                                </td>
+                                <td class="cell-date">{{ pendencia.data_importacao_fmt | default('N/A') }}</td>
+                                <td class="cell-actions text-center">
+                                    <a href="{{ url_for('edit_pendencia', pendencia_id=pendencia.id) }}" class="btn btn-sm btn-info" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <form method="POST" action="{{ url_for('delete_pendencia_route', pendencia_id=pendencia.id) }}" style="display: inline-block;" onsubmit="return confirm('Tem a certeza que deseja apagar esta pendência? Esta ação não pode ser desfeita.');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-danger" title="Apagar">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-folder-open empty-icon"></i>
+                <p>Nenhuma pendência encontrada com os filtros aplicados ou não há pendências registadas.</p>
             </div>
-        </div>
-        {% endif %}
-    </div>
+            {% endif %}
+        </div> {# Fim de .card-body #}
+    </div> {# Fim de .card #}
 {% endblock %}
 
 {% block scripts_extra %}
-{{ super() }} {# Para herdar scripts de base.html, se houver #}
+{{ super() }}
 <script>
 function imprimirRelatorioPendentes() {
     const form = document.getElementById('pendentesFilterForm');
     const params = new URLSearchParams(new FormData(form));
-    // Remove parâmetros vazios para não poluir a URL do PDF
     const cleanParams = new URLSearchParams();
-    for (const [key, value] of params) { 
-        if (value && value.trim() !== '') { 
-            cleanParams.append(key, value);
-        }
+    for (const [key, value] of params) {
+        if (value && value.trim() !== '') { cleanParams.append(key, value); }
     }
-    // Adicionar um timestamp pode ajudar a evitar problemas de cache do browser com o PDF
-    // cleanParams.append('_t', new Date().getTime());
     window.open("{{ url_for('imprimir_relatorio_pendentes') }}?" + cleanParams.toString(), '_blank');
 }
 </script>
 {% endblock %}
 
 {% block head_extra %}
-{{ super() }} {# Para herdar estilos de base.html, se houver #}
+{{ super() }}
 <style>
-    /* Estilos para inputs de filtro e botões de ação, se não cobertos pelo style.css geral */
-    .form-control-sm {
-        padding: 0.3rem 0.6rem;
-        font-size: 0.875rem;
-        height: calc(1.5em + .3rem + 2px); /* Ajustar altura se necessário */
-    }
-    .btn-sm { /* Botões de filtro e ação */
-        padding: 0.25rem 0.5rem;
-        font-size: 0.75rem; 
-        line-height: 1.5;
-    }
-    .col-actions { /* Largura da coluna de ações */
-        width: 100px; /* Ajustar conforme o espaço necessário para os botões */
-        white-space: nowrap; /* Evita que os botões quebrem linha */
-    }
-     .cell-actions .btn {
-        margin: 0 2px; /* Pequeno espaçamento entre botões de editar e apagar */
-    }
+    .form-control-sm { padding: 0.3rem 0.6rem; font-size: 0.875rem; height: calc(1.5em + .3rem + 2px); }
+    .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; line-height: 1.5; }
+    .col-actions { width: 100px; white-space: nowrap; }
+    .cell-actions .btn { margin: 0 2px; }
+    .fa-xs { font-size: 0.70em; margin-left: 3px; opacity: 0.7; }
+    .card-body.table-responsive-container { padding: 0; }
+    .card-body.table-responsive-container .table-responsive { margin-bottom: 0; border: none; border-radius: 0;}
+    .card-body.table-responsive-container .table { margin-bottom: 0; }
+    .card > .table-responsive { border-top-left-radius: 0; border-top-right-radius: 0;}
 </style>
 {% endblock %}
