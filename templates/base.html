@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-br" data-theme="polis-azure-light"> {# Tema padrão inicial: Pólis Azure Light #}
+<html lang="pt-br" data-theme="azul-transac-light"> {# Novo tema padrão #}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,65 +10,89 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    {% block head_extra %}{% endblock %}
+    {% block head_extra %}
+    <style>
+        .sr-only { 
+            position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; 
+            overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0;
+        }
+        .nav-icon-theme { 
+            font-size: 1.1rem; color: var(--text-muted-color); 
+        }
+        html[data-theme$="-dark"] .nav-icon-theme {
+             color: var(--text-muted-color);
+        }
+    </style>
+    {% endblock %}
 </head>
 <body>
     <header class="app-header">
-        <h1><i class="fas fa-landmark"></i> Pólis</h1>
+        <div class="app-header-content container"> {# Adicionado .container para alinhar com o conteúdo principal #}
+            <div class="app-header-brand">
+                {# Logótipo como imagem #}
+                <img src="{{ url_for('static', filename='images/polis_logo.png') }}" alt="Logótipo Pólis" class="app-logo-img">
+                <h1>Pólis</h1>
+            </div>
+            
+            <div class="nav-actions">
+                {% if current_user.is_authenticated %}
+                <div class="user-info">
+                     <span><i class="fas fa-user-circle"></i> Olá, {{ current_user.username }}</span>
+                     <a href="{{ url_for('logout') }}" class="logout-link" title="Sair"><i class="fas fa-sign-out-alt"></i> <span class="sr-only">Logout</span></a>
+                </div>
+                {% endif %}
+                
+                <div class="theme-selector-container">
+                    <label for="theme-select" class="sr-only">Selecionar Tema</label>
+                    <i class="fas fa-palette nav-icon-theme" aria-hidden="true"></i>
+                    <select id="theme-select" title="Selecionar Tema Visual">
+                        <optgroup label="Azul Transac">
+                            <option value="azul-transac-light">Azul Transac - Claro</option>
+                            <option value="azul-transac-dark">Azul Transac - Escuro</option>
+                        </optgroup>
+                        <optgroup label="Pólis Azure (Original)">
+                            <option value="polis-azure-light">Azure Claro</option>
+                            <option value="polis-azure-dark">Azure Escuro</option>
+                        </optgroup>
+                        <optgroup label="Ethos Urbano">
+                            <option value="ethos-urbano-light">Urbano - Dia</option>
+                            <option value="ethos-urbano-dark">Urbano - Noite</option>
+                        </optgroup>
+                        <optgroup label="Oásis Digital">
+                            <option value="oasis-digital-light">Oásis - Alvorada</option>
+                            <option value="oasis-digital-dark">Oásis - Crepúsculo</option>
+                        </optgroup>
+                        <optgroup label="Ciber Prisma">
+                            <option value="ciber-prisma-light">Prisma - Espectro</option>
+                            <option value="ciber-prisma-dark">Prisma - Vácuo</option>
+                        </optgroup>
+                    </select>
+                </div>
+            </div>
+        </div>
     </header>
 
+    {% if current_user.is_authenticated %}
     <nav class="main-nav">
-        <div class="main-nav-links">
-            {% if current_user.is_authenticated %}
-                <a href="{{ url_for('home') }}" class="{{ 'active' if request.endpoint == 'home' else '' }}"><i class="fas fa-home"></i> Home</a>
-                <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' else '' }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-                <a href="{{ url_for('inserir_dados') }}" class="{{ 'active' if request.endpoint == 'inserir_dados' else '' }}"><i class="fas fa-file-upload"></i> Inserir Dados</a>
-                <a href="{{ url_for('relatorio_cobrancas') }}" class="{{ 'active' if request.endpoint == 'relatorio_cobrancas' else '' }}"><i class="fas fa-file-invoice-dollar"></i> Rel. Cobranças</a>
-                <a href="{{ url_for('relatorio_pendentes') }}" class="{{ 'active' if request.endpoint == 'relatorio_pendentes' else '' }}"><i class="fas fa-clipboard-list"></i> Rel. Pendentes</a>
-                <a href="{{ url_for('change_password') }}" class="{{ 'active' if request.endpoint == 'change_password' else '' }}"><i class="fas fa-user-shield"></i> Alterar Senha</a>
-
+        <div class="main-nav-links container"> {# Adicionado .container para alinhar #}
+            <a href="{{ url_for('home') }}" class="nav-item {{ 'active' if request.endpoint == 'home' else '' }}"><i class="fas fa-home"></i> Home</a>
+            <a href="{{ url_for('dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'dashboard' else '' }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+            <a href="{{ url_for('inserir_dados') }}" class="nav-item {{ 'active' if request.endpoint == 'inserir_dados' else '' }}"><i class="fas fa-file-upload"></i> Inserir Dados</a>
+            <a href="{{ url_for('relatorio_cobrancas') }}" class="nav-item {{ 'active' if request.endpoint == 'relatorio_cobrancas' else '' }}"><i class="fas fa-file-invoice-dollar"></i> Rel. Cobranças</a>
+            <a href="{{ url_for('relatorio_pendentes') }}" class="nav-item {{ 'active' if request.endpoint == 'relatorio_pendentes' else '' }}"><i class="fas fa-clipboard-list"></i> Rel. Pendentes</a>
+            {# Links de admin e conta movidos para um possível dropdown no futuro ou mantidos aqui #}
+            <div class="nav-item-group-right">
+                <a href="{{ url_for('change_password') }}" class="nav-item {{ 'active' if request.endpoint == 'change_password' else '' }}"><i class="fas fa-user-shield"></i> Alterar Senha</a>
                 {% if current_user.username in ADMIN_USERNAMES %}
-                    <a href="{{ url_for('add_user_admin') }}" class="{{ 'active' if request.endpoint == 'add_user_admin' else '' }}"><i class="fas fa-user-plus"></i> Adicionar Utilizador</a>
-                    <a href="{{ url_for('view_audit_log') }}" class="{{ 'active' if request.endpoint == 'view_audit_log' else '' }}"><i class="fas fa-history"></i> Log de Auditoria</a>
+                    <a href="{{ url_for('add_user_admin') }}" class="nav-item {{ 'active' if request.endpoint == 'add_user_admin' else '' }}"><i class="fas fa-user-plus"></i> Adicionar Utilizador</a>
+                    <a href="{{ url_for('view_audit_log') }}" class="nav-item {{ 'active' if request.endpoint == 'view_audit_log' else '' }}"><i class="fas fa-history"></i> Log de Auditoria</a>
                 {% endif %}
-            {% else %}
-                <a href="{{ url_for('login') }}" class="{{ 'active' if request.endpoint == 'login' else '' }}"><i class="fas fa-sign-in-alt"></i> Login</a>
-            {% endif %}
-        </div>
-        <div class="nav-actions">
-            {% if current_user.is_authenticated %}
-            <div class="user-info">
-                 <span><i class="fas fa-user-circle"></i> Olá, {{ current_user.username }}</span>
-                 <a href="{{ url_for('logout') }}" class="logout-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
-            </div>
-            {% endif %}
-            
-            <div class="theme-selector-container">
-                <label for="theme-select" class="sr-only">Selecionar Tema</label> {# sr-only para acessibilidade se o ícone for suficiente #}
-                <i class="fas fa-palette nav-icon-theme" aria-hidden="true"></i>
-                <select id="theme-select" title="Selecionar Tema Visual">
-                    <optgroup label="Pólis Azure">
-                        <option value="polis-azure-light">Azure Claro</option>
-                        <option value="polis-azure-dark">Azure Escuro</option>
-                    </optgroup>
-                    <optgroup label="Ethos Urbano">
-                        <option value="ethos-urbano-light">Urbano - Dia</option>
-                        <option value="ethos-urbano-dark">Urbano - Noite</option>
-                    </optgroup>
-                    <optgroup label="Oásis Digital">
-                        <option value="oasis-digital-light">Oásis - Alvorada</option>
-                        <option value="oasis-digital-dark">Oásis - Crepúsculo</option>
-                    </optgroup>
-                    <optgroup label="Ciber Prisma">
-                        <option value="ciber-prisma-light">Prisma - Espectro</option>
-                        <option value="ciber-prisma-dark">Prisma - Vácuo</option>
-                    </optgroup>
-                </select>
             </div>
         </div>
     </nav>
+    {% endif %}
 
-    <main class="container">
+    <main class="container content-wrapper"> {# content-wrapper para espaçamento do footer fixo #}
         {% block before_flash_messages %}{% endblock %}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -91,7 +115,7 @@
         (function() {
             const themeSelect = document.getElementById('theme-select');
             const htmlEl = document.documentElement;
-            const storageKey = 'polisAppPreferredTheme_v2'; // Nova chave para evitar conflitos com versões antigas
+            const storageKey = 'polisAppPreferredTheme_v3'; 
 
             function applyTheme(themeName) {
                 if (themeName) {
@@ -105,15 +129,14 @@
 
             let preferredTheme = localStorage.getItem(storageKey);
             if (!preferredTheme) {
-                // Tenta detetar o modo do sistema para o tema padrão (Pólis Azure)
-                const defaultBaseTheme = 'polis-azure';
+                const defaultBaseTheme = 'azul-transac'; // Novo tema padrão
                 if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
                     preferredTheme = defaultBaseTheme + '-dark';
                 } else {
                     preferredTheme = defaultBaseTheme + '-light';
                 }
             }
-            applyTheme(preferredTheme); // Aplica o tema ao carregar
+            applyTheme(preferredTheme); 
 
             if (themeSelect) {
                 themeSelect.addEventListener('change', function() {

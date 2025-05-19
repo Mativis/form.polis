@@ -1,84 +1,131 @@
-<!-- home.html -->
 {% extends "base.html" %}
 
 {% block title %}Página Inicial{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h2 class="page-title"><i class="fas fa-home"></i> Bem-vindo ao Sistema Pólis!</h2>
+<div class="home-hero">
+    {# O título principal e subtítulo podem vir do tema ou serem fixos aqui #}
+    {# Se o logótipo do header for suficiente, pode remover este logótipo central #}
+    {# <img src="{{ url_for('static', filename='images/polis_logo.png') }}" alt="Logótipo Pólis Central" class="home-hero-logo"> #}
+    <h2 class="home-hero-title">PÓLIS GESTÃO INTELIGENTE</h2>
+    <p class="home-hero-subtitle">Sistema de Monitoramento e Análise de Dados.</p>
 </div>
 
-<div class="card welcome-card">
-    <div class="card-body">
-        <p>Este é o painel de controle do seu sistema de gestão de dados.</p>
-        <p>Utilize o menu de navegação para:</p>
-        
-        <ul class="feature-list">
-            <li class="feature-item">
-                <i class="fas fa-file-upload feature-icon"></i>
-                <div class="feature-content">
-                    <strong>Inserir Dados:</strong> Importar novas informações de cobranças e pendências
-                </div>
-            </li>
-            <li class="feature-item">
-                <i class="fas fa-file-invoice-dollar feature-icon"></i>
-                <div class="feature-content">
-                    <strong>Rel. Cobranças:</strong> Visualizar o relatório atualizado de cobranças
-                </div>
-            </li>
-            <li class="feature-item">
-                <i class="fas fa-clipboard-list feature-icon"></i>
-                <div class="feature-content">
-                    <strong>Rel. Pendentes:</strong> Acompanhar pendências e seus status
-                </div>
-            </li>
-            {% if current_user.username in ADMIN_USERNAMES %}
-            <li class="feature-item">
-                <i class="fas fa-user-plus feature-icon"></i>
-                <div class="feature-content">
-                    <strong>Adicionar Usuário:</strong> Gerenciar acesso de novos usuários
-                </div>
-            </li>
-            {% endif %}
-        </ul>
-        
-        <div class="welcome-footer">
-            <p>Se precisar de ajuda, consulte a documentação ou entre em contato com o suporte.</p>
+<div class="home-actions-grid">
+    <div class="action-card">
+        <div class="action-card-icon">
+            <i class="fas fa-database fa-3x"></i> {# Ícone para Inserir Dados #}
         </div>
+        <h3 class="action-card-title">Inserção de Dados</h3>
+        <p class="action-card-description">Importe e processe dados de cobranças e pendências diretamente no sistema com precisão.</p>
+        <a href="{{ url_for('inserir_dados') }}" class="btn btn-primary btn-lg action-card-button">
+            <i class="fas fa-file-import"></i> Iniciar Importação
+        </a>
+    </div>
+
+    <div class="action-card">
+        <div class="action-card-icon">
+            <i class="fas fa-chart-line fa-3x"></i> {# Ícone para Relatórios/Dashboard #}
+        </div>
+        <h3 class="action-card-title">Relatórios e Análises</h3>
+        <p class="action-card-description">Consulte, filtre e analise os dados cadastrados de forma dinâmica e eficiente.</p>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg action-card-button">
+            <i class="fas fa-search"></i> Aceder Relatórios
+        </a>
     </div>
 </div>
+
+{# Opcional: Botão de Suporte como na referência #}
+{# 
+<div class="support-button-container">
+    <a href="https://wa.me/SEUNUMERODOWHATSAPP" class="btn btn-success btn-lg" target="_blank">
+        <i class="fab fa-whatsapp"></i> Suporte via WhatsApp
+    </a>
+</div> 
+#}
 {% endblock %}
 
 {% block head_extra %}
+{{ super() }}
 <style>
-    .welcome-card {
-        margin-top: 1.5rem;
-    }
-    
-    .feature-list {
-        list-style: none;
-        padding-left: 0;
-    }
-    
-    .feature-item {
-        display: flex;
-        align-items: center;
-        padding: 0.75rem 0;
-        border-bottom: 1px solid var(--card-border-color);
-    }
-    
-    .feature-icon {
-        color: var(--link-color);
-        margin-right: 1rem;
-        font-size: 1.25rem;
-        width: 1.5em;
+    .home-hero {
         text-align: center;
+        padding: 3rem 1rem;
+        margin-bottom: 2rem;
+        /* Pode adicionar um gradiente de fundo aqui se a imagem do body não for desejada nesta página específica */
+        /* background: linear-gradient(to bottom, var(--accent-color-light), var(--bg-color)); */
+        /* border-radius: var(--border-radius-base); */
     }
-    
-    .welcome-footer {
-        margin-top: 1.5rem;
-        padding-top: 1rem;
-        border-top: 1px solid var(--card-border-color);
+    .home-hero-logo {
+        max-width: 180px; /* Ajuste conforme o seu logo central */
+        margin-bottom: 1.5rem;
+    }
+    .home-hero-title {
+        font-size: 2.75rem; /* Maior */
+        font-weight: 700;
+        color: var(--accent-color); /* Cor de destaque */
+        margin-bottom: 0.75rem;
+    }
+    .home-hero-subtitle {
+        font-size: 1.25rem;
+        color: var(--text-muted-color);
+        margin-bottom: 2rem;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .home-actions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Responsivo */
+        gap: 2rem; /* Espaçamento entre os cartões */
+        margin-bottom: 3rem;
+    }
+
+    .action-card {
+        background-color: var(--card-bg);
+        border-radius: var(--border-radius-base);
+        box-shadow: var(--card-box-shadow);
+        padding: 2rem;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+    .action-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--card-hover-box-shadow);
+    }
+    .action-card-icon {
+        color: var(--accent-color);
+        margin-bottom: 1.5rem;
+    }
+    .action-card-icon .fas, .action-card-icon .fab {
+        font-size: 3rem; /* Ícones maiores */
+    }
+    .action-card-title {
+        font-size: 1.5rem;
+        color: var(--text-color);
+        margin-bottom: 0.75rem;
+        font-weight: 600;
+    }
+    .action-card-description {
+        font-size: 0.95rem;
+        color: var(--text-muted-color);
+        margin-bottom: 1.5rem;
+        flex-grow: 1; /* Para alinhar botões em baixo se descrições tiverem tamanhos diferentes */
+    }
+    .action-card-button.btn-lg {
+        padding: 0.75rem 1.5rem;
+        font-size: 1rem;
+        width: 80%; /* Botões com largura definida */
+        max-width: 250px;
+    }
+    .support-button-container {
+        text-align: center;
+        margin-top: 2rem;
+        margin-bottom: 2rem;
     }
 </style>
 {% endblock %}
