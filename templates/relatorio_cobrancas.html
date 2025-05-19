@@ -5,12 +5,13 @@
 {% block content %}
     <h2 class="page-title"><i class="fas fa-file-invoice-dollar"></i> Relatório de Cobranças</h2>
 
-    <div class="card filter-form mb-4"> {# Adicionado mb-4 para espaço antes do card da tabela #}
+    <div class="card filter-form mb-4">
         <div class="card-header">
             <h3><i class="fas fa-filter"></i> Filtrar Cobranças</h3>
         </div>
         <div class="card-body">
-            <form method="GET" action="{{ url_for('relatorio_cobrancas') }}" class="form-inline">
+            {# Formulário de filtros existente #}
+            <form method="GET" action="{{ url_for('relatorio_cobrancas') }}" id="cobrancasFilterForm" class="form-inline">
                 <div class="form-group">
                     <label for="filtro_pedido">Pedido:</label>
                     <input type="text" name="filtro_pedido" id="filtro_pedido" value="{{ filtros.pedido or '' }}" class="form-control form-control-sm">
@@ -36,17 +37,16 @@
                     <label for="filtro_status">Status:</label>
                     <select name="filtro_status" id="filtro_status" class="form-control form-control-sm">
                         <option value="">Todos</option>
-                        {% for status_val in distinct_status %}
+                        {% for status_val in distinct_status %} {# Estes serão os valores padronizados #}
                             <option value="{{ status_val }}" {% if filtros.status == status_val %}selected{% endif %}>{{ status_val }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                {# NOVO FILTRO DE CONFORMIDADE #}
                 <div class="form-group">
                     <label for="filtro_conformidade">Conformidade:</label>
                     <select name="filtro_conformidade" id="filtro_conformidade" class="form-control form-control-sm">
                         <option value="">Todas</option>
-                        {% for conf_val in distinct_conformidade %}
+                        {% for conf_val in distinct_conformidade %} {# Estes serão os valores padronizados #}
                             <option value="{{ conf_val }}" {% if filtros.conformidade == conf_val %}selected{% endif %}>{{ conf_val }}</option>
                         {% endfor %}
                     </select>
@@ -54,13 +54,17 @@
                 <div class="form-group-actions">
                     <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Filtrar</button>
                     <a href="{{ url_for('relatorio_cobrancas') }}" class="btn btn-secondary btn-sm"><i class="fas fa-times-circle"></i> Limpar</a>
+                    {# NOVO BOTÃO DE EXPORTAR EXCEL #}
+                    <button type="button" onclick="exportarCobrancasExcel()" class="btn btn-success btn-sm">
+                        <i class="fas fa-file-excel"></i> Exportar Excel
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
     <div class="card">
-        <div class="card-body table-responsive-container"> {# Para padding e responsividade da tabela #}
+        <div class="card-body table-responsive-container">
             {% if cobrancas %}
                 <div class="table-responsive">
                     <table class="table table-striped table-hover">
@@ -136,8 +140,32 @@
                 <p>Nenhuma cobrança encontrada com os filtros aplicados ou não há cobranças registadas.</p>
             </div>
             {% endif %}
-        </div> {# Fim de .card-body #}
-    </div> {# Fim de .card #}
+        </div> 
+    </div> 
+{% endblock %}
+
+{% block scripts_extra %}
+{{ super() }}
+{# NOVO SCRIPT PARA EXPORTAR EXCEL #}
+<script>
+function exportarCobrancasExcel() {
+    const form = document.getElementById('cobrancasFilterForm'); // Certifique-se que o form de filtro tem este ID
+    const params = new URLSearchParams();
+    // Adiciona apenas os filtros que têm valor
+    if (form.filtro_pedido.value) params.append('filtro_pedido', form.filtro_pedido.value);
+    if (form.filtro_os.value) params.append('filtro_os', form.filtro_os.value);
+    if (form.filtro_placa.value) params.append('filtro_placa', form.filtro_placa.value);
+    if (form.filtro_filial.value) params.append('filtro_filial', form.filtro_filial.value);
+    if (form.filtro_status.value) params.append('filtro_status', form.filtro_status.value);
+    if (form.filtro_conformidade.value) params.append('filtro_conformidade', form.filtro_conformidade.value);
+
+    // Constrói a URL para a rota de exportação
+    const exportUrl = "{{ url_for('exportar_excel_cobrancas') }}?" + params.toString();
+    
+    // Abre a URL (o navegador irá iniciar o download)
+    window.location.href = exportUrl;
+}
+</script>
 {% endblock %}
 
 {% block head_extra %}

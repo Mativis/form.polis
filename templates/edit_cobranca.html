@@ -3,53 +3,63 @@
 {% block title %}Editar Cobrança{% endblock %}
 
 {% block content %}
-<h2 class="page-title"><i class="fas fa-edit"></i> Editar Cobrança (ID: {{ cobranca.id }})</h2>
+<h2 class="page-title"><i class="fas fa-edit"></i> Editar Cobrança (ID: {{ cobranca_id_for_url }})</h2>
 
 <div class="card">
     <div class="card-header">
         <h3>Detalhes da Cobrança</h3>
     </div>
     <div class="card-body">
-        <form method="POST" action="{{ url_for('edit_cobranca', cobranca_id=cobranca.id) }}">
+        {# Usa form_data para repopular o formulário se houver erro de validação ou se for um GET request inicial #}
+        {% set data_atual = form_data if form_data else cobranca %}
+        <form method="POST" action="{{ url_for('edit_cobranca', cobranca_id=cobranca_id_for_url) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
             <div class="form-row">
                 <div class="form-group col-md-6">
                     <label for="pedido">Pedido:</label>
-                    <input type="text" id="pedido" name="pedido" class="form-control" value="{{ request.form.pedido or cobranca.pedido }}" required>
+                    <input type="text" id="pedido" name="pedido" class="form-control" value="{{ data_atual.pedido }}" required>
                 </div>
                 <div class="form-group col-md-6">
                     <label for="os">OS (Ordem de Serviço):</label>
-                    <input type="text" id="os" name="os" class="form-control" value="{{ request.form.os or cobranca.os }}" required>
+                    <input type="text" id="os" name="os" class="form-control" value="{{ data_atual.os }}" required>
                 </div>
             </div>
 
             <div class="form-row">
                 <div class="form-group col-md-6">
                     <label for="filial">Filial:</label>
-                    <input type="text" id="filial" name="filial" class="form-control" value="{{ request.form.filial or cobranca.filial }}">
+                    <input type="text" id="filial" name="filial" class="form-control" value="{{ data_atual.filial }}">
                 </div>
                 <div class="form-group col-md-6">
                     <label for="placa">Placa:</label>
-                    <input type="text" id="placa" name="placa" class="form-control" value="{{ request.form.placa or cobranca.placa }}">
+                    <input type="text" id="placa" name="placa" class="form-control" value="{{ data_atual.placa }}">
                 </div>
             </div>
 
             <div class="form-group">
                 <label for="transportadora">Transportadora:</label>
-                <input type="text" id="transportadora" name="transportadora" class="form-control" value="{{ request.form.transportadora or cobranca.transportadora }}">
+                <input type="text" id="transportadora" name="transportadora" class="form-control" value="{{ data_atual.transportadora }}">
             </div>
 
             <div class="form-row">
                 <div class="form-group col-md-6">
                     <label for="conformidade">Conformidade:</label>
-                    {# Poderia ser um select se os valores forem fixos #}
-                    <input type="text" id="conformidade" name="conformidade" class="form-control" value="{{ request.form.conformidade or cobranca.conformidade }}">
+                    <select id="conformidade" name="conformidade" class="form-control" required>
+                        <option value="">Selecione...</option>
+                        {% for opcao in opcoes_conformidade %}
+                        <option value="{{ opcao }}" {% if data_atual.conformidade == opcao %}selected{% endif %}>{{ opcao }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="form-group col-md-6">
                     <label for="status">Status:</label>
-                    {# Poderia ser um select se os valores forem fixos e conhecidos #}
-                    <input type="text" id="status" name="status" class="form-control" value="{{ request.form.status or cobranca.status }}">
+                    <select id="status" name="status" class="form-control" required>
+                        <option value="">Selecione...</option>
+                        {% for opcao in opcoes_status %}
+                        <option value="{{ opcao }}" {% if data_atual.status == opcao %}selected{% endif %}>{{ opcao }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
 
@@ -65,24 +75,8 @@
 {% block head_extra %}
 {{ super() }}
 <style>
-    .form-row {
-        display: flex;
-        flex-wrap: wrap;
-        margin-right: -5px;
-        margin-left: -5px;
-    }
-    .form-row > .col-md-6 {
-        padding-right: 5px;
-        padding-left: 5px;
-        flex: 0 0 50%;
-        max-width: 50%;
-    }
-    /* Para ecrãs mais pequenos, fazer os campos ocuparem a largura total */
-    @media (max-width: 768px) {
-        .form-row > .col-md-6 {
-            flex: 0 0 100%;
-            max-width: 100%;
-        }
-    }
+    .form-row { display: flex; flex-wrap: wrap; margin-right: -5px; margin-left: -5px; }
+    .form-row > .col-md-6 { padding-right: 5px; padding-left: 5px; flex: 0 0 50%; max-width: 50%; }
+    @media (max-width: 768px) { .form-row > .col-md-6 { flex: 0 0 100%; max-width: 100%; } }
 </style>
 {% endblock %}

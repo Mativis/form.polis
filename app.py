@@ -1,7 +1,7 @@
 # app.py
 import os
 import sqlite3
-from flask import Flask, render_template, request, redirect, url_for, flash, make_response, g, get_flashed_messages, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, make_response, g, get_flashed_messages, abort, send_file
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -10,10 +10,11 @@ from datetime import datetime
 import logging
 import pytz
 import re
-# Não precisamos mais de FPDF aqui para esta abordagem
-# from fpdf import FPDF 
-# Nem do nosso pdf_utils se a única função lá dentro era para o FPDF
-# from utils.pdf_utils import gerar_pdf_pendencias 
+# Removida importação de FPDF e pdf_utils, pois a funcionalidade de PDF foi removida
+# Adicionar importações para Pandas e BytesIO
+import pandas as pd
+import io
+
 
 from utils.excel_processor import (
     processar_excel_cobrancas,
@@ -147,7 +148,7 @@ def add_security_headers(response):
     return response
 
 # --- Rotas Principais e de Autenticação (mantidas) ---
-# ... (O código para /login, /logout, /home, /inserir-dados, /admin/add_user, /alterar-senha, /dashboard, CRUD Cobranças, CRUD Pendências, Relatórios, /admin/audit_log permanece o mesmo da versão anterior) ...
+# ... (O código para /login, /logout, /home, /inserir-dados, /admin/add_user, /alterar-senha, /dashboard, CRUD Cobranças, CRUD Pendências, Relatório Pendentes, /admin/audit_log permanece o mesmo da versão anterior) ...
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated: return redirect(url_for('home'))
@@ -250,11 +251,11 @@ def change_password():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    db_path = app.config['DATABASE']; status_sem_cobranca = 'S/ Cobrança'
+    db_path = app.config['DATABASE']; status_sem_cobranca = 'Sem cobrança' 
     try:
         count_sem_cobranca = get_count_pedidos_status_especifico(status_sem_cobranca, db_path)
         count_lancados = get_count_total_pedidos_lancados(db_path) 
-        count_nao_conforme = get_count_pedidos_nao_conforme(db_path)
+        count_nao_conforme = get_count_pedidos_nao_conforme(db_path) 
         pedidos_sc_por_filial = get_pedidos_status_por_filial(status_sem_cobranca, db_path)
         placas_sc = get_placas_status_especifico(status_sem_cobranca, db_path)
     except Exception as e:
@@ -268,17 +269,26 @@ def dashboard():
 def edit_cobranca(cobranca_id):
     cobranca = get_cobranca_by_id(cobranca_id, app.config['DATABASE'])
     if not cobranca: log_audit("EDIT_COBRANCA_NOT_FOUND", f"ID {cobranca_id} não encontrado."); flash("Cobrança não encontrada.", "error"); return redirect(url_for('relatorio_cobrancas'))
+    opcoes_status = ["Com cobrança", "Sem cobrança"]
+    opcoes_conformidade = ["Conforme", "Verificar"]
     form_data_repopulate = dict(cobranca) 
     if request.method == 'POST':
-        form_data_repopulate = {k: request.form.get(k, '').strip() for k in cobranca.keys() if k != 'id'}
-        form_data_repopulate['conformidade'] = form_data_repopulate.get('conformidade','').upper()
+        form_data_repopulate = {
+            'pedido': request.form.get('pedido', '').strip(), 'os': request.form.get('os', '').strip(),
+            'filial': request.form.get('filial', '').strip(), 'placa': request.form.get('placa', '').strip(),
+            'transportadora': request.form.get('transportadora', '').strip(),
+            'conformidade': request.form.get('conformidade', '').strip(), 
+            'status': request.form.get('status', '').strip()             
+        }
         if not form_data_repopulate['pedido'] or not form_data_repopulate['os']: flash("Pedido e OS são campos obrigatórios.", "error")
+        elif form_data_repopulate['status'] not in opcoes_status: flash("Valor inválido para Status.", "error")
+        elif form_data_repopulate['conformidade'] not in opcoes_conformidade: flash("Valor inválido para Conformidade.", "error")
         else:
             if update_cobranca_db(cobranca_id, form_data_repopulate, app.config['DATABASE']):
                 log_audit("EDIT_COBRANCA_SUCCESS", f"Cobrança ID {cobranca_id} atualizada."); flash("Cobrança atualizada com sucesso!", "success"); return redirect(url_for('relatorio_cobrancas'))
             else: log_audit("EDIT_COBRANCA_FAILURE", f"Falha ao atualizar cobrança ID {cobranca_id}."); flash("Erro ao atualizar cobrança. Pedido/OS duplicado?", "error")
-        return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id)
-    return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id)
+        return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade)
+    return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade)
 @app.route('/cobranca/<int:cobranca_id>/delete', methods=['POST'])
 @login_required 
 def delete_cobranca_route(cobranca_id):
@@ -326,11 +336,21 @@ def relatorio_cobrancas():
     filtros_query = {k: v for k, v in filtros_form.items() if v}
     try:
         cobrancas = get_cobrancas(filtros=filtros_query, db_name=app.config['DATABASE'])
-        distinct_status = get_distinct_values('status', 'cobrancas', app.config['DATABASE'])
+        distinct_status = ["Com cobrança", "Sem cobrança"] # Valores padronizados
         distinct_filiais = get_distinct_values('filial', 'cobrancas', app.config['DATABASE'])
-        distinct_conformidade = get_distinct_values('conformidade', 'cobrancas', app.config['DATABASE'])
-        return render_template('relatorio_cobrancas.html', cobrancas=cobrancas, filtros=filtros_form, distinct_status=distinct_status, distinct_filiais=distinct_filiais, distinct_conformidade=distinct_conformidade) 
-    except Exception as e: logger.error(f"Erro relatório cobranças: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_cobrancas.html', cobrancas=[], filtros=filtros_form, distinct_status=[], distinct_filiais=[], distinct_conformidade=[])
+        distinct_conformidade = ["Conforme", "Verificar"] # Valores padronizados
+        
+        return render_template('relatorio_cobrancas.html', 
+                               cobrancas=cobrancas, 
+                               filtros=filtros_form, 
+                               distinct_status=distinct_status, 
+                               distinct_filiais=distinct_filiais,
+                               distinct_conformidade=distinct_conformidade) 
+    except Exception as e: 
+        logger.error(f"Erro relatório cobranças: {e}", exc_info=True)
+        flash("Erro ao carregar relatório de cobranças.", "error")
+        return render_template('relatorio_cobrancas.html', cobrancas=[], filtros=filtros_form, distinct_status=[], distinct_filiais=[], distinct_conformidade=[])
+
 @app.route('/relatorio-pendentes')
 @login_required
 def relatorio_pendentes():
@@ -376,49 +396,89 @@ def view_audit_log():
     except Exception as e: logger.error(f"Erro ao buscar logs: {e}"); flash("Erro ao buscar logs.", "error")
     return render_template('admin/view_audit_log.html', logs=logs_processed, current_page=page, total_pages=total_pages, filters=filters_form, total_logs=total_logs)
 
-# --- ROTA DE IMPRESSÃO PARA VISUALIZAÇÃO HTML ---
-@app.route('/relatorio-pendentes/imprimir_visualizacao') # Nome da rota alterado
+# --- ROTA DE IMPRESSÃO PARA VISUALIZAÇÃO HTML (mantida) ---
+@app.route('/relatorio-pendentes/imprimir_visualizacao')
 @login_required
-def imprimir_visualizacao_pendentes(): # Nome da função alterado
-    # Obter filtros da query string
-    filtros_form = {
-        'pedido_ref': request.args.get('filtro_pedido_ref', '').strip(),
-        'fornecedor': request.args.get('filtro_fornecedor', '').strip(),
-        'filial_pend': request.args.get('filtro_filial_pend', '').strip(),
-        'status_pend': request.args.get('filtro_status_pend', '').strip(),
-        'valor_min': request.args.get('filtro_valor_min', '').strip(),
-        'valor_max': request.args.get('filtro_valor_max', '').strip()
-    }
-    
-    filtros_query = {}
-    for key_form, value in filtros_form.items():
-        if value: 
-            if key_form == 'filial_pend': filtros_query['filial'] = value
-            elif key_form == 'status_pend': filtros_query['status'] = value
-            else: filtros_query[key_form] = value
-            
+def imprimir_visualizacao_pendentes():
+    filtros_form = {k: request.args.get(f'filtro_{k}', '').strip() for k in ['pedido_ref', 'fornecedor', 'filial_pend', 'status_pend', 'valor_min', 'valor_max']}
+    filtros_query = { ( 'filial' if k=='filial_pend' else ('status' if k=='status_pend' else k) ) : v for k,v in filtros_form.items() if v}
     try:
         pendentes_data = get_pendentes(filtros=filtros_query, db_name=app.config['DATABASE'])
-        
-        now_sp = datetime.now(pytz.timezone('America/Sao_Paulo'))
-        data_geracao = now_sp.strftime('%d/%m/%Y %H:%M:%S')
-        
-        # Renderiza o template HTML que já está preparado para um layout de "impressão"
-        # O template 'reports/pendentes_pdf.html' será usado, mas o navegador irá renderizá-lo.
-        # O utilizador pode então usar a função de impressão do navegador (Ctrl+P) para imprimir ou "Guardar como PDF".
-        
+        now_sp = datetime.now(pytz.timezone('America/Sao_Paulo')); data_geracao = now_sp.strftime('%d/%m/%Y %H:%M:%S')
         log_audit("VIEW_PRINT_PENDENCIAS", f"Filtros: {filtros_form}")
-        return render_template('reports/pendentes_pdf.html', 
-                               pendentes=pendentes_data, 
-                               filtros=filtros_form, 
-                               usuario_gerador=current_user.username, 
-                               data_geracao=data_geracao)
-
+        return render_template('reports/pendentes_pdf.html', pendentes=pendentes_data, filtros=filtros_form, 
+                               usuario_gerador=current_user.username, data_geracao=data_geracao)
     except Exception as e: 
         logger.error(f"Erro ao gerar visualização para impressão de pendências: {e}",exc_info=True)
         log_audit("VIEW_PRINT_PENDENCIAS_ERROR",f"Erro: {e}, Filtros: {filtros_form}")
-        flash("Erro ao gerar visualização para impressão. Verifique os logs para mais detalhes.","error")
+        flash("Erro ao gerar visualização para impressão. Verifique os logs.","error")
         return redirect(url_for('relatorio_pendentes',**filtros_form))
+
+# --- NOVA ROTA PARA EXPORTAR COBRANÇAS PARA EXCEL ---
+@app.route('/relatorio-cobrancas/exportar_excel')
+@login_required
+def exportar_excel_cobrancas():
+    filtros_form = {
+        'pedido': request.args.get('filtro_pedido', '').strip(),
+        'os': request.args.get('filtro_os', '').strip(),
+        'status': request.args.get('filtro_status', '').strip(),
+        'filial': request.args.get('filtro_filial', '').strip(),
+        'placa': request.args.get('filtro_placa', '').strip(),
+        'conformidade': request.args.get('filtro_conformidade', '').strip()
+    }
+    filtros_query = {k: v for k, v in filtros_form.items() if v}
+    
+    try:
+        cobrancas_data = get_cobrancas(filtros=filtros_query, db_name=app.config['DATABASE'])
+        
+        if not cobrancas_data:
+            flash("Nenhum dado encontrado para exportar com os filtros aplicados.", "warning")
+            # Mantém os filtros na URL ao redirecionar
+            return redirect(url_for('relatorio_cobrancas', **filtros_form))
+
+        # Converter dados sqlite3.Row para lista de dicionários para o Pandas
+        dados_para_df = [dict(row) for row in cobrancas_data]
+        
+        df = pd.DataFrame(dados_para_df)
+        
+        # Selecionar e renomear colunas para o Excel (opcional, mas bom para clareza)
+        colunas_excel = {
+            'id': 'ID',
+            'pedido': 'Pedido',
+            'os': 'OS',
+            'filial': 'Filial',
+            'placa': 'Placa',
+            'transportadora': 'Transportadora',
+            'conformidade': 'Conformidade',
+            'status': 'Status',
+            'data_importacao_fmt': 'Data Importação' # Usar a data já formatada
+        }
+        # Manter apenas as colunas desejadas e na ordem desejada
+        df_export = df[[col for col in colunas_excel.keys() if col in df.columns]].rename(columns=colunas_excel)
+
+        # Criar o ficheiro Excel em memória
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_export.to_excel(writer, index=False, sheet_name='Cobrancas')
+        output.seek(0)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"relatorio_cobrancas_{timestamp}.xlsx"
+        
+        log_audit("EXPORT_EXCEL_COBRANCAS", f"Filtros: {filtros_form}, Registos: {len(df_export)}")
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename # Nome do ficheiro para download
+        )
+
+    except Exception as e:
+        logger.error(f"Erro ao exportar cobranças para Excel: {e}", exc_info=True)
+        log_audit("EXPORT_EXCEL_COBRANCAS_ERROR", f"Erro: {e}, Filtros: {filtros_form}")
+        flash("Erro ao exportar dados para Excel. Verifique os logs.", "error")
+        return redirect(url_for('relatorio_cobrancas', **filtros_form))
 
 
 # --- CSRF Dummy ---
