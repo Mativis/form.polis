@@ -191,9 +191,7 @@ html[data-theme="ethos-urbano-light"] {
 }
 
 /* Tema Ethos Urbano - Noite */
-html[data-theme="ethos-urbano-dark"] {
-   /* Herda a maioria das variáveis de Pólis Azure Dark */
-}
+html[data-theme="ethos-urbano-dark"] {/* Herda a maioria das variáveis de Pólis Azure Dark */}
 
 /* Tema Oásis Digital - Alvorada */
 html[data-theme="oasis-digital-light"] {
