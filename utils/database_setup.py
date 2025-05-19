@@ -101,19 +101,19 @@ def create_tables():
         return
 
     # Usuário admin padrão
-    senha_admin = input('Digite a senha para admin (Splinter) :')
+    senha_admin = input('Digite a senha para admin (Mativi) :')
     try:
       
         cursor.execute("SELECT id FROM users WHERE username = ?", ('Splinter',))
         if not cursor.fetchone():
             cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                           ('Splinter', generate_password_hash(f'{senha_admin}')))
-            print("Usuário 'Splinter' padrão inserido.")
+                           ('Mativi', generate_password_hash(f'{senha_admin}')))
+            print("Usuário 'Mativi' padrão inserido.")
         else:
-            print("Usuário 'Splinter' padrão já existe.")
+            print("Usuário 'Mativi' padrão já existe.")
 
     except sqlite3.IntegrityError:
-        print("Usuário 'Mativi' ou 'Splinter' já existe (erro de integridade).")
+        print("Usuário 'Mativi' já existe (erro de integridade).")
     except Exception as e:
         print(f"Erro ao tentar inserir usuário padrão: {e}")
 
