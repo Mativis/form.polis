@@ -162,7 +162,7 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
         original_columns = list(df_pendentes.columns)
         df_pendentes.columns = [normalize_column_name_generic(col, "pend") for col in df_pendentes.columns]
         conceptual_map = {
-            'pedido_ref': ['id', 'pedido_ref'], 'valor': ['valor'], 'fornecedor': ['fornecedor'], 
+            'pedido_ref': ['id', 'pedido_ref'], 'valor': ['Valor Total'], 'fornecedor': ['forncedor'], 
             'filial': ['filial'], 'status': ['status'], 'data_finalizacao': ['data_finalizacao', 'data de finalizacao']
         }
         mapped_df = pd.DataFrame(); missing_mandatory = []
