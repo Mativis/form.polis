@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-br" data-theme="dia"> {# Tema padrão inicial: Dia #}
+<html lang="pt-br" data-theme="azul-transac-light"> {# Tema padrão: Azul Transac - Claro #}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -19,7 +19,10 @@
         .nav-icon-theme { 
             font-size: 1.1rem; color: var(--text-muted-color); 
         }
-        html[data-theme="noite"] .nav-icon-theme { /* Garante que o ícone da paleta também se adapte ao tema escuro */
+        html[data-theme$="-dark"] .nav-icon-theme { /* Corrigido para o tema escuro novo */
+             color: var(--text-muted-color);
+        }
+        html[data-theme="noite"] .nav-icon-theme { /* Específico para o nome do tema "noite" */
              color: var(--text-muted-color);
         }
         .page-actions { 
@@ -72,7 +75,7 @@
                     <label for="theme-select" class="sr-only">Selecionar Tema</label>
                     <i class="fas fa-palette nav-icon-theme" aria-hidden="true"></i>
                     <select id="theme-select" title="Selecionar Tema Visual">
-                        {# Opções simplificadas para Dia e Noite #}
+                        {# Mantendo o select simplificado para Dia/Noite #}
                         <option value="dia">Pólis Dia</option>
                         <option value="noite">Pólis Noite</option>
                     </select>
@@ -81,25 +84,12 @@
         </div>
     </header>
 
-    {% if current_user.is_authenticated %}
+    {# BARRA DE NAVEGAÇÃO SECUNDÁRIA REMOVIDA #}
+    {# {% if current_user.is_authenticated %}
     <nav class="main-nav">
-        <div class="main-nav-links container">
-            <a href="{{ url_for('home') }}" class="nav-item {{ 'active' if request.endpoint == 'home' else '' }}"><i class="fas fa-home"></i> Home Pólis</a>
-            <a href="{{ url_for('mundo_os') }}" class="nav-item {{ 'active' if request.endpoint == 'mundo_os' or request.endpoint == 'dashboard_pedidos' or request.endpoint == 'dashboard_manutencao' else '' }}"><i class="fas fa-sitemap"></i> Mundo de OS & Dashboards</a>
-            <a href="{{ url_for('relatorio_cobrancas') }}" class="nav-item {{ 'active' if request.endpoint == 'relatorio_cobrancas' else '' }}"><i class="fas fa-file-invoice-dollar"></i> Rel. Cobranças</a>
-            <a href="{{ url_for('relatorio_pendentes') }}" class="nav-item {{ 'active' if request.endpoint == 'relatorio_pendentes' else '' }}"><i class="fas fa-clipboard-list"></i> Rel. Pendentes</a>
-            <a href="{{ url_for('inserir_dados') }}" class="nav-item {{ 'active' if request.endpoint == 'inserir_dados' else '' }}"><i class="fas fa-file-upload"></i> Inserir Dados</a>
-            
-            <div class="nav-item-group-right">
-                <a href="{{ url_for('change_password') }}" class="nav-item {{ 'active' if request.endpoint == 'change_password' else '' }}"><i class="fas fa-user-shield"></i> Alterar Senha</a>
-                {% if current_user.username in ADMIN_USERNAMES %}
-                    <a href="{{ url_for('add_user_admin') }}" class="nav-item {{ 'active' if request.endpoint == 'add_user_admin' else '' }}"><i class="fas fa-user-plus"></i> Adicionar Utilizador</a>
-                    <a href="{{ url_for('view_audit_log') }}" class="nav-item {{ 'active' if request.endpoint == 'view_audit_log' else '' }}"><i class="fas fa-history"></i> Log de Auditoria</a>
-                {% endif %}
-            </div>
-        </div>
+        ... (conteúdo anterior da nav aqui) ...
     </nav>
-    {% endif %}
+    {% endif %} #}
 
     <main class="container content-wrapper">
         {% if pagina_anterior_url %}
@@ -132,11 +122,11 @@
         (function() {
             const themeSelect = document.getElementById('theme-select');
             const htmlEl = document.documentElement;
-            const storageKey = 'polisAppPreferredTheme_v4'; // Nova chave para o tema único
+            const storageKey = 'polisAppPreferredTheme_v4_dia_noite'; // Chave atualizada
 
             function applyTheme(themeName) {
                 if (themeName) {
-                    htmlEl.setAttribute('data-theme', themeName); // Define "dia" ou "noite"
+                    htmlEl.setAttribute('data-theme', themeName); // "dia" ou "noite"
                     localStorage.setItem(storageKey, themeName);
                     if (themeSelect && themeSelect.value !== themeName) {
                         themeSelect.value = themeName;
@@ -146,11 +136,11 @@
 
             let preferredTheme = localStorage.getItem(storageKey);
             if (!preferredTheme) {
-                // Padrão para "dia", mas verifica preferência do sistema para "noite"
+                const defaultBaseTheme = 'dia'; // Padrão para o tema claro
                 if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                    preferredTheme = 'noite';
+                    preferredTheme = 'noite'; // Muda para noite se o sistema preferir
                 } else {
-                    preferredTheme = 'dia'; // Padrão para claro
+                    preferredTheme = defaultBaseTheme;
                 }
             }
             applyTheme(preferredTheme); 

@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="page-header">
-    <h2 class="page-title"><i class="fas fa-tools"></i> Dashboard de Manutenção (por OS)</h2>
+    <h2 class="page-title"><i class="fas fa-tools"></i> Dashboard de Cobranças OS</h2>
 </div>
 
 {# Dashboard 1: Resumo Geral de OS #}
@@ -14,19 +14,19 @@
         <div class="summary-metric-card">
             <div class="summary-metric-icon"><i class="fas fa-exclamation-circle"></i></div>
             <div class="summary-metric-value">{{ count_os_sem_cobranca }}</div>
-            <div class="summary-metric-label">OS S/ Cobrança Lançada</div>
+            <div class="summary-metric-label">OS sem cobrança Lançada</div>
             <a href="{{ url_for('relatorio_cobrancas', filtro_status=status_os_sem_cobranca_label) }}" class="summary-metric-link">Ver Detalhes <i class="fas fa-angle-right"></i></a>
         </div>
         <div class="summary-metric-card">
             <div class="summary-metric-icon"><i class="fas fa-check-circle"></i></div>
             <div class="summary-metric-value">{{ count_total_os_lancadas }}</div>
-            <div class="summary-metric-label">Total de OS Lançadas</div>
+            <div class="summary-metric-label">Total de OS lançadas</div>
             <a href="{{ url_for('relatorio_cobrancas', filtro_status='Com cobrança') }}" class="summary-metric-link">Ver Todas <i class="fas fa-angle-right"></i></a>
         </div>
         <div class="summary-metric-card alert">
             <div class="summary-metric-icon"><i class="fas fa-wrench"></i></div> {# Ícone diferente para "OS para verificar" #}
             <div class="summary-metric-value">{{ count_os_para_verificar }}</div>
-            <div class="summary-metric-label">OS para Verificar (Conformidade)</div>
+            <div class="summary-metric-label">OS para Verificar </div>
             <a href="{{ url_for('relatorio_cobrancas', filtro_conformidade='Verificar') }}" class="summary-metric-link">Ver Detalhes <i class="fas fa-angle-right"></i></a>
         </div>
     </div>
@@ -36,7 +36,7 @@
 <div class="dashboard-section">
     <div class="card">
         <div class="card-header">
-            <h3 class="card-title"><i class="fas fa-store-alt"></i> OS S/ Cobrança por Filial</h3>
+            <h3 class="card-title"><i class="fas fa-store-alt"></i> OS sem cobrança por filial</h3>
         </div>
         <div class="card-body">
             {% if os_sc_por_filial %}
@@ -71,7 +71,7 @@
 <div class="dashboard-section">
     <div class="card">
         <div class="card-header">
-            <h3 class="card-title"><i class="fas fa-truck-moving"></i> Placas com OS de Status "{{ status_os_sem_cobranca_label }}"</h3>
+            <h3 class="card-title"><i class="fas fa-truck-moving"></i> Placas com OS de status "{{ status_os_sem_cobranca_label }}"</h3>
         </div>
         <div class="card-body {% if placas_os_sc %}scrollable-list{% endif %}">
             {% if placas_os_sc %}
