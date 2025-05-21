@@ -13,7 +13,6 @@ import re
 import pandas as pd
 import io
 
-# Atualizar importações do excel_processor
 from utils.excel_processor import (
     processar_excel_cobrancas,
     processar_excel_pendentes,
@@ -28,22 +27,20 @@ from utils.excel_processor import (
     delete_pendencia_db,
     # Funções do Dashboard de Pedidos
     get_count_pedidos_status_especifico,
-    get_placas_status_especifico, # Esta pode ser reutilizada ou adaptada
+    get_placas_status_especifico, 
     get_count_total_pedidos_lancados,
     get_count_pedidos_nao_conforme,
     get_pedidos_status_por_filial,
-    # NOVAS Funções para Dashboard de Manutenção (OS)
+    # Funções para Dashboard de Manutenção (OS)
     get_count_os_status_especifico,
     get_count_total_os_lancadas,
     get_count_os_para_verificar,
     get_os_status_por_filial
 )
-# Remover importação de pdf_utils se a funcionalidade de PDF foi removida
-# from utils.pdf_utils import gerar_pdf_pendencias 
 
 app = Flask(__name__)
 
-# --- Configurações da Aplicação (mantidas) ---
+# --- Configurações da Aplicação ---
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(32))
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['DATABASE'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'polis_database.db')
@@ -52,7 +49,7 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' 
 ALLOWED_EXTENSIONS = {'xlsx', 'csv'}
 
-# --- Configuração do Logging (mantida) ---
+# --- Configuração do Logging ---
 log_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'polis_app.log')
 logging.basicConfig(
     level=logging.INFO,
@@ -63,7 +60,7 @@ logger = logging.getLogger(__name__)
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
-# --- Helpers de Conexão com Banco de Dados (mantidos) ---
+# --- Helpers de Conexão com Banco de Dados ---
 def get_db():
     db = getattr(g, '_database', None)
     if db is None: db = g._database = sqlite3.connect(app.config['DATABASE']); db.row_factory = sqlite3.Row
@@ -73,10 +70,10 @@ def close_connection(exception):
     db = getattr(g, '_database', None)
     if db is not None: db.close()
 
-# --- Configuração do Flask-Login (mantida) ---
+# --- Configuração do Flask-Login ---
 login_manager = LoginManager(); login_manager.init_app(app); login_manager.login_view = 'login'
 login_manager.login_message = "Por favor, faça login para aceder a esta página."; login_manager.login_message_category = "info"
-ADMIN_USERNAMES = ['admin', 'Splinter', 'Mativi']
+ADMIN_USERNAMES = ['admin', 'Splinter', 'Mativi'] # Certifique-se que os seus admins estão aqui
 class User(UserMixin):
     def __init__(self, id, username): self.id = id; self.username = username
 @login_manager.user_loader
@@ -91,7 +88,7 @@ def get_user_by_username_from_db(username):
         return cursor.fetchone()
     except Exception as e: logger.error(f"Erro ao buscar utilizador '{username}': {e}", exc_info=True); return None
 
-# --- Decoradores (mantidos) ---
+# --- Decoradores ---
 def admin_required(f):
     @wraps(f)
     @login_required
@@ -102,7 +99,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- Log de Auditoria (mantido) ---
+# --- Log de Auditoria ---
 def log_audit(action: str, details: str = None):
     try:
         db = get_db(); user_id = current_user.id if current_user and current_user.is_authenticated else None
@@ -114,7 +111,7 @@ def log_audit(action: str, details: str = None):
         db.commit(); logger.info(f"AUDIT_LOG: User '{username}' -> Action: {action}, Details: {details}")
     except Exception as e: logger.error(f"Erro ao logar auditoria (Action: {action}): {e}", exc_info=True)
 
-# --- Filtros e Processadores de Contexto Jinja (mantidos) ---
+# --- Filtros e Processadores de Contexto Jinja ---
 @app.context_processor
 def inject_global_vars(): return dict(current_year=datetime.now().year, ADMIN_USERNAMES=ADMIN_USERNAMES)
 @app.template_filter('format_currency')
@@ -146,7 +143,7 @@ def normalize_for_css(value):
     norm = norm.replace('ó', 'o').replace('ô', 'o').replace('õ', 'o').replace('ú', 'u').replace('ü', 'u')
     norm = re.sub(r'[^\w-]', '', norm); norm = re.sub(r'-+', '-', norm).strip('-'); return norm if norm else 'desconhecido'
 
-# --- Headers de Segurança (mantidos) ---
+# --- Headers de Segurança ---
 @app.after_request
 def add_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'; response.headers['X-Frame-Options'] = 'SAMEORIGIN' 
@@ -163,7 +160,8 @@ def login():
         user_data = get_user_by_username_from_db(username)
         if user_data and check_password_hash(user_data['password_hash'], password):
             login_user(User(id=user_data['id'], username=user_data['username'])); log_audit("LOGIN_SUCCESS", f"Utilizador '{username}' logado.")
-            flash('Login realizado com sucesso!', 'success'); next_page = request.args.get('next'); return redirect(next_page or url_for('mundo_os')) # Redireciona para Mundo de OS
+            flash('Login realizado com sucesso!', 'success'); next_page = request.args.get('next')
+            return redirect(next_page or url_for('home')) # Redireciona para a nova home após login
         else: log_audit("LOGIN_FAILURE", f"Tentativa login falhou para '{username}'."); flash('Utilizador ou senha inválidos.', 'error')
     return render_template('login.html')
 
@@ -173,20 +171,19 @@ def logout():
     username_logged_out = current_user.username; logout_user(); log_audit("LOGOUT", f"Utilizador '{username_logged_out}' deslogado.")
     flash('Você foi desconectado com sucesso.', 'success'); return redirect(url_for('login'))
 
-@app.route('/') # Rota raiz agora leva para Mundo de OS
-@app.route('/mundo-os') # NOVA ROTA
+@app.route('/') # NOVA ROTA HOME
+@login_required
+def home(): 
+    return render_template('home.html') # Não precisa de 'pagina_anterior_url'
+
+@app.route('/mundo-os') 
 @login_required
 def mundo_os():
-    return render_template('mundo_os.html')
+    return render_template('mundo_os.html', 
+                           pagina_anterior_url=url_for('home'), 
+                           pagina_anterior_texto="Home Pólis")
 
-@app.route('/home') # Rota home original, pode ser removida ou redirecionar para mundo_os
-@login_required
-def home():
-    # Pode redirecionar para mundo_os ou manter uma home diferente se necessário
-    return redirect(url_for('mundo_os'))
-
-
-# --- Rota de Inserção de Dados (mantida) ---
+# --- Rota de Inserção de Dados ---
 def allowed_file(filename): return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 @app.route('/inserir-dados', methods=['GET', 'POST'])
 @login_required
@@ -214,9 +211,11 @@ def inserir_dados():
                 try: os.remove(file_path)
                 except Exception as e_rem: logger.error(f"Erro ao remover '{file_path}': {e_rem}")
         return redirect(url_for('inserir_dados') + anchor)
-    return render_template('inserir_dados.html')
+    return render_template('inserir_dados.html', 
+                           pagina_anterior_url=url_for('home'),
+                           pagina_anterior_texto="Home Pólis")
 
-# --- Rotas de Administração (mantidas) ---
+# --- Rotas de Administração ---
 @app.route('/admin/add_user', methods=['GET', 'POST'])
 @admin_required
 def add_user_admin():
@@ -238,8 +237,9 @@ def add_user_admin():
             except Exception as e: logger.error(f"Erro DB/geral ao adicionar '{username}': {e}", exc_info=True); log_audit("ADMIN_ADD_USER_ERROR", f"Erro add '{username}': {e}"); flash('Erro ao adicionar. Tente novamente.', 'error')
         else:
             for error_msg in form_errors.values(): flash(error_msg, 'error')
-        return render_template('admin/add_user.html', username=form_data.get('username',''), form_errors=form_errors)
-    return render_template('admin/add_user.html', username='', form_errors={})
+        return render_template('admin/add_user.html', username=form_data.get('username',''), form_errors=form_errors, pagina_anterior_url=url_for('mundo_os'), pagina_anterior_texto="Mundo de OS")
+    return render_template('admin/add_user.html', username='', form_errors={}, pagina_anterior_url=url_for('mundo_os'), pagina_anterior_texto="Mundo de OS")
+
 @app.route('/alterar-senha', methods=['GET', 'POST'])
 @login_required
 def change_password():
@@ -259,16 +259,16 @@ def change_password():
             try:
                 db = get_db(); cursor = db.cursor()
                 cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(new_pw), current_user.id)); db.commit()
-                log_audit("CHANGE_PASSWORD_SUCCESS", f"Utilizador '{current_user.username}' alterou senha."); flash('Senha alterada!', 'success'); return redirect(url_for('home'))
+                log_audit("CHANGE_PASSWORD_SUCCESS", f"Utilizador '{current_user.username}' alterou senha."); flash('Senha alterada!', 'success'); return redirect(url_for('mundo_os')) 
             except Exception as e: logger.error(f"Erro DB/geral ao alterar senha para ID {current_user.id}: {e}", exc_info=True); log_audit("CHANGE_PASSWORD_ERROR", f"Erro ao alterar senha para '{current_user.username}': {e}"); flash('Erro ao alterar senha.', 'error')
         else:
             for msg in form_errors.values(): flash(msg, 'error')
-    return render_template('account/change_password.html', form_errors=form_errors)
+    return render_template('account/change_password.html', form_errors=form_errors, pagina_anterior_url=url_for('mundo_os'), pagina_anterior_texto="Mundo de OS")
 
-# --- ROTA DO DASHBOARD DE PEDIDOS (ANTIGO /dashboard) ---
-@app.route('/dashboard-pedidos') # Rota renomeada
+# --- ROTA DO DASHBOARD DE PEDIDOS ---
+@app.route('/dashboard-pedidos') 
 @login_required
-def dashboard_pedidos(): # Nome da função alterado
+def dashboard_pedidos(): 
     db_path = app.config['DATABASE']; status_sem_cobranca = 'Sem cobrança' 
     try:
         count_sem_cobranca = get_count_pedidos_status_especifico(status_sem_cobranca, db_path)
@@ -283,42 +283,38 @@ def dashboard_pedidos(): # Nome da função alterado
                            count_sem_cobranca=count_sem_cobranca, count_lancados=count_lancados, count_nao_conforme=count_nao_conforme,
                            pedidos_sc_por_filial=pedidos_sc_por_filial, placas_sc=placas_sc, 
                            status_sem_cobranca_label=status_sem_cobranca,
-                           dashboard_title="Dashboard de Cobranças (por Pedido)") # Título para o template
+                           dashboard_title="Dashboard de Cobranças (por Pedido)",
+                           pagina_anterior_url=url_for('mundo_os'), 
+                           pagina_anterior_texto="Mundo de OS")
 
 # --- NOVA ROTA PARA DASHBOARD MANUTENÇÃO (FOCO EM OS) ---
 @app.route('/dashboard-manutencao')
 @login_required
 def dashboard_manutencao():
     db_path = app.config['DATABASE']
-    status_os_sem_cobranca = 'Sem cobrança' # Usar o mesmo status padronizado
-    
+    status_os_sem_cobranca = 'Sem cobrança' 
     try:
         count_os_sem_cobranca = get_count_os_status_especifico(status_os_sem_cobranca, db_path)
         count_total_os_lancadas = get_count_total_os_lancadas(db_path)
-        count_os_para_verificar = get_count_os_para_verificar(db_path) # Baseado na conformidade "Verificar"
+        count_os_para_verificar = get_count_os_para_verificar(db_path) 
         os_sc_por_filial = get_os_status_por_filial(status_os_sem_cobranca, db_path)
-        # Placas com OS S/ Cobrança (reutiliza a função, mas a lógica de filtro no relatório será por OS)
-        # Se a lógica de placas for diferente para OS, precisaria de uma nova função.
-        # Por agora, vamos assumir que a visualização de placas ainda é útil neste contexto.
         placas_os_sc = get_placas_status_especifico(status_os_sem_cobranca, db_path) 
-
     except Exception as e:
         logger.error(f"Erro ao carregar dados para o dashboard de manutenção (OS): {e}", exc_info=True)
         flash("Erro ao carregar dados para o dashboard de manutenção (OS).", "error")
         count_os_sem_cobranca = 0; count_total_os_lancadas = 0; count_os_para_verificar = 0
         os_sc_por_filial = []; placas_os_sc = []
-    
     return render_template('dashboard_manutencao.html',
                            count_os_sem_cobranca=count_os_sem_cobranca,
                            count_total_os_lancadas=count_total_os_lancadas,
                            count_os_para_verificar=count_os_para_verificar,
                            os_sc_por_filial=os_sc_por_filial,
-                           placas_os_sc=placas_os_sc, # Passa as placas para o template
-                           status_os_sem_cobranca_label=status_os_sem_cobranca)
+                           placas_os_sc=placas_os_sc, 
+                           status_os_sem_cobranca_label=status_os_sem_cobranca,
+                           pagina_anterior_url=url_for('mundo_os'),
+                           pagina_anterior_texto="Mundo de OS")
 
-
-# --- CRUD para Cobranças (mantido) ---
-# ... (código mantido) ...
+# --- CRUD para Cobranças ---
 @app.route('/cobranca/<int:cobranca_id>/edit', methods=['GET', 'POST'])
 @login_required 
 def edit_cobranca(cobranca_id):
@@ -328,8 +324,8 @@ def edit_cobranca(cobranca_id):
     form_data_repopulate = dict(cobranca) 
     if request.method == 'POST':
         form_data_repopulate = {k: request.form.get(k, '').strip() for k in cobranca.keys() if k != 'id'}
-        form_data_repopulate['conformidade'] = form_data_repopulate.get('conformidade','').strip() # Já vem do select
-        form_data_repopulate['status'] = form_data_repopulate.get('status','').strip() # Já vem do select
+        form_data_repopulate['conformidade'] = form_data_repopulate.get('conformidade','').strip()
+        form_data_repopulate['status'] = form_data_repopulate.get('status','').strip()
         if not form_data_repopulate['pedido'] or not form_data_repopulate['os']: flash("Pedido e OS são campos obrigatórios.", "error")
         elif form_data_repopulate['status'] not in opcoes_status: flash("Valor inválido para Status.", "error")
         elif form_data_repopulate['conformidade'] not in opcoes_conformidade: flash("Valor inválido para Conformidade.", "error")
@@ -337,8 +333,8 @@ def edit_cobranca(cobranca_id):
             if update_cobranca_db(cobranca_id, form_data_repopulate, app.config['DATABASE']):
                 log_audit("EDIT_COBRANCA_SUCCESS", f"Cobrança ID {cobranca_id} atualizada."); flash("Cobrança atualizada!", "success"); return redirect(url_for('relatorio_cobrancas'))
             else: log_audit("EDIT_COBRANCA_FAILURE", f"Falha ao atualizar ID {cobranca_id}."); flash("Erro ao atualizar. Pedido/OS duplicado?", "error")
-        return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade)
-    return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade)
+        return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade, pagina_anterior_url=url_for('relatorio_cobrancas'), pagina_anterior_texto="Relatório de Cobranças")
+    return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade, pagina_anterior_url=url_for('relatorio_cobrancas'), pagina_anterior_texto="Relatório de Cobranças")
 @app.route('/cobranca/<int:cobranca_id>/delete', methods=['POST'])
 @login_required 
 def delete_cobranca_route(cobranca_id):
@@ -349,8 +345,7 @@ def delete_cobranca_route(cobranca_id):
         else: log_audit("DELETE_COBRANCA_FAILURE", f"Falha ao apagar ID {cobranca_id}."); flash("Erro ao apagar.", "error")
     return redirect(url_for('relatorio_cobrancas'))
 
-# --- CRUD para Pendências (mantido) ---
-# ... (código mantido) ...
+# --- CRUD para Pendências ---
 @app.route('/pendencia/<int:pendencia_id>/edit', methods=['GET', 'POST'])
 @login_required 
 def edit_pendencia(pendencia_id):
@@ -369,8 +364,8 @@ def edit_pendencia(pendencia_id):
                     log_audit("EDIT_PENDENCIA_SUCCESS", f"Pendência ID {pendencia_id} atualizada."); flash("Pendência atualizada!", "success"); return redirect(url_for('relatorio_pendentes'))
                 else: log_audit("EDIT_PENDENCIA_FAILURE", f"Falha ao atualizar ID {pendencia_id}."); flash("Erro ao atualizar pendência.", "error")
             except ValueError: flash("Valor da pendência inválido.", "error")
-        return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id)
-    return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id)
+        return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id, pagina_anterior_url=url_for('relatorio_pendentes'), pagina_anterior_texto="Relatório de Pendências")
+    return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id, pagina_anterior_url=url_for('relatorio_pendentes'), pagina_anterior_texto="Relatório de Pendências")
 @app.route('/pendencia/<int:pendencia_id>/delete', methods=['POST'])
 @login_required 
 def delete_pendencia_route(pendencia_id):
@@ -381,7 +376,7 @@ def delete_pendencia_route(pendencia_id):
         else: log_audit("DELETE_PENDENCIA_FAILURE", f"Falha ao apagar ID {pendencia_id}."); flash("Erro ao apagar pendência.", "error")
     return redirect(url_for('relatorio_pendentes'))
 
-# --- Relatórios (mantido com filtro de conformidade) ---
+# --- Relatórios ---
 @app.route('/relatorio-cobrancas')
 @login_required
 def relatorio_cobrancas():
@@ -389,11 +384,9 @@ def relatorio_cobrancas():
     filtros_query = {k: v for k, v in filtros_form.items() if v}
     try:
         cobrancas = get_cobrancas(filtros=filtros_query, db_name=app.config['DATABASE'])
-        distinct_status = ["Com cobrança", "Sem cobrança"] 
-        distinct_filiais = get_distinct_values('filial', 'cobrancas', app.config['DATABASE'])
-        distinct_conformidade = ["Conforme", "Verificar"] 
-        return render_template('relatorio_cobrancas.html', cobrancas=cobrancas, filtros=filtros_form, distinct_status=distinct_status, distinct_filiais=distinct_filiais, distinct_conformidade=distinct_conformidade) 
-    except Exception as e: logger.error(f"Erro relatório cobranças: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_cobrancas.html', cobrancas=[], filtros=filtros_form, distinct_status=[], distinct_filiais=[], distinct_conformidade=[])
+        distinct_status = ["Com cobrança", "Sem cobrança"]; distinct_filiais = get_distinct_values('filial', 'cobrancas', app.config['DATABASE']); distinct_conformidade = ["Conforme", "Verificar"]
+        return render_template('relatorio_cobrancas.html', cobrancas=cobrancas, filtros=filtros_form, distinct_status=distinct_status, distinct_filiais=distinct_filiais, distinct_conformidade=distinct_conformidade, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis") 
+    except Exception as e: logger.error(f"Erro relatório cobranças: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_cobrancas.html', cobrancas=[], filtros=filtros_form, distinct_status=[], distinct_filiais=[], distinct_conformidade=[], pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
 @app.route('/relatorio-pendentes')
 @login_required
 def relatorio_pendentes():
@@ -404,10 +397,10 @@ def relatorio_pendentes():
         distinct_status_pend = get_distinct_values('status', 'pendentes', app.config['DATABASE'])
         distinct_fornecedores_pend = get_distinct_values('fornecedor', 'pendentes', app.config['DATABASE'])
         distinct_filiais_pend = get_distinct_values('filial', 'pendentes', app.config['DATABASE'])
-        return render_template('relatorio_pendentes.html', pendentes=pendentes, filtros=filtros_form, distinct_status_pend=distinct_status_pend, distinct_fornecedores_pend=distinct_fornecedores_pend, distinct_filiais_pend=distinct_filiais_pend)
-    except Exception as e: logger.error(f"Erro relatório pendências: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_pendentes.html', pendentes=[], filtros=filtros_form, distinct_status_pend=[], distinct_fornecedores_pend=[], distinct_filiais_pend=[])
+        return render_template('relatorio_pendentes.html', pendentes=pendentes, filtros=filtros_form, distinct_status_pend=distinct_status_pend, distinct_fornecedores_pend=distinct_fornecedores_pend, distinct_filiais_pend=distinct_filiais_pend, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
+    except Exception as e: logger.error(f"Erro relatório pendências: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_pendentes.html', pendentes=[], filtros=filtros_form, distinct_status_pend=[], distinct_fornecedores_pend=[], distinct_filiais_pend=[], pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
 
-# --- Rota de Visualização do Log de Auditoria (Admin) (mantida) ---
+# --- Rota de Visualização do Log de Auditoria (Admin) ---
 @app.route('/admin/audit_log')
 @admin_required
 def view_audit_log():
@@ -438,7 +431,7 @@ def view_audit_log():
             except Exception: log['timestamp_fmt'] = log['timestamp'] + " (Erro Formato)"
             logs_processed.append(log)
     except Exception as e: logger.error(f"Erro ao buscar logs: {e}"); flash("Erro ao buscar logs.", "error")
-    return render_template('admin/view_audit_log.html', logs=logs_processed, current_page=page, total_pages=total_pages, filters=filters_form, total_logs=total_logs)
+    return render_template('admin/view_audit_log.html', logs=logs_processed, current_page=page, total_pages=total_pages, filters=filters_form, total_logs=total_logs, pagina_anterior_url=url_for('mundo_os'), pagina_anterior_texto="Mundo de OS")
 
 # --- ROTA DE IMPRESSÃO PARA VISUALIZAÇÃO HTML (mantida) ---
 @app.route('/relatorio-pendentes/imprimir_visualizacao')
@@ -450,8 +443,12 @@ def imprimir_visualizacao_pendentes():
         pendentes_data = get_pendentes(filtros=filtros_query, db_name=app.config['DATABASE'])
         now_sp = datetime.now(pytz.timezone('America/Sao_Paulo')); data_geracao = now_sp.strftime('%d/%m/%Y %H:%M:%S')
         log_audit("VIEW_PRINT_PENDENCIAS", f"Filtros: {filtros_form}")
+        # Passa os filtros atuais para que o botão "Voltar" na página de impressão possa retornar ao relatório com os mesmos filtros
+        pagina_anterior_com_filtros = url_for('relatorio_pendentes', **request.args)
         return render_template('reports/pendentes_pdf.html', pendentes=pendentes_data, filtros=filtros_form, 
-                               usuario_gerador=current_user.username, data_geracao=data_geracao)
+                               usuario_gerador=current_user.username, data_geracao=data_geracao,
+                               pagina_anterior_url=pagina_anterior_com_filtros, 
+                               pagina_anterior_texto="Relatório de Pendências")
     except Exception as e: 
         logger.error(f"Erro ao gerar visualização para impressão de pendências: {e}",exc_info=True)
         log_audit("VIEW_PRINT_PENDENCIAS_ERROR",f"Erro: {e}, Filtros: {filtros_form}")

@@ -1,36 +1,34 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard Pólis{% endblock %}
+{% block title %}{{ dashboard_title | default('Dashboard Pedidos') }} - Pólis{% endblock %}
 
 {% block content %}
+{# O botão Voltar será renderizado pelo base.html se pagina_anterior_url for passado pela rota #}
+
 <div class="page-header">
-    <h2 class="page-title"><i class="fas fa-tachometer-alt"></i> Dashboard de Cobranças</h2>
+    <h2 class="page-title"><i class="fas fa-tachometer-alt"></i> {{ dashboard_title | default('Dashboard de Cobranças por Pedido') }}</h2>
 </div>
 
-{# Dashboard 1: Resumo de Dados Gerais #}
+{# Dashboard 1: Resumo de Dados Gerais por Pedido #}
 <div class="dashboard-section">
     <h3 class="dashboard-section-title">Resumo Geral de Pedidos</h3>
     <div class="dashboard-summary-grid">
         <div class="summary-metric-card">
             <div class="summary-metric-icon"><i class="fas fa-exclamation-circle"></i></div>
-            <div class="summary-metric-value">{{ count_sem_cobranca }}</div>
+            <div class="summary-metric-value">{{ count_sem_cobranca | default('0') }}</div>
             <div class="summary-metric-label">Pedidos S/ Cobrança Lançada</div>
-            {# Link para o relatório de cobranças filtrado pelo status "S/ Cobrança" #}
             <a href="{{ url_for('relatorio_cobrancas', filtro_status=status_sem_cobranca_label) }}" class="summary-metric-link">Ver Detalhes <i class="fas fa-angle-right"></i></a>
         </div>
         <div class="summary-metric-card">
             <div class="summary-metric-icon"><i class="fas fa-check-circle"></i></div>
-            <div class="summary-metric-value">{{ count_lancados }}</div>
+            <div class="summary-metric-value">{{ count_lancados | default('0') }}</div>
             <div class="summary-metric-label">Total de Pedidos Lançados</div>
-            {# Link para o relatório de cobranças sem filtros (todos os pedidos) #}
-            <a href="{{ url_for('relatorio_cobrancas') }}" class="summary-metric-link">Ver Todos <i class="fas fa-angle-right"></i></a>
+            <a href="{{ url_for('relatorio_cobrancas', filtro_status='Com cobrança') }}" class="summary-metric-link">Ver Todos <i class="fas fa-angle-right"></i></a>
         </div>
-        <div class="summary-metric-card alert"> {# Classe 'alert' para destacar não conformes #}
+        <div class="summary-metric-card alert">
             <div class="summary-metric-icon"><i class="fas fa-times-circle"></i></div>
-            <div class="summary-metric-value">{{ count_nao_conforme }}</div>
-            <div class="summary-metric-label">Pedidos para verificar</div>
-            {# Link para o relatório de cobranças filtrado por conformidade "NAO CONFORME" #}
-            {# Certifique-se que 'NAO CONFORME' é o valor exato usado na sua base de dados ou o valor que o filtro espera #}
+            <div class="summary-metric-value">{{ count_nao_conforme | default('0') }}</div>
+            <div class="summary-metric-label">Pedidos para Verificar (Conformidade)</div>
             <a href="{{ url_for('relatorio_cobrancas', filtro_conformidade='Verificar') }}" class="summary-metric-link">Ver Detalhes <i class="fas fa-angle-right"></i></a>
         </div>
     </div>
@@ -52,7 +50,6 @@
                         </span>
                         <div>
                             <span class="badge badge-warning badge-pill mr-2">{{ item.count_pedidos }} pedido(s)</span>
-                            {# Link para o relatório de cobranças filtrado pela filial específica e status "S/ Cobrança" #}
                             <a href="{{ url_for('relatorio_cobrancas', filtro_filial=item.filial, filtro_status=status_sem_cobranca_label) }}" class="btn btn-sm btn-outline-primary">
                                 <i class="fas fa-search"></i> Ver
                             </a>
@@ -74,15 +71,14 @@
 <div class="dashboard-section">
     <div class="card">
         <div class="card-header">
-            <h3 class="card-title"><i class="fas fa-truck-moving"></i> Placas com Status "{{ status_sem_cobranca_label }}"</h3>
+            <h3 class="card-title"><i class="fas fa-truck-moving"></i> Placas com Status "{{ status_sem_cobranca_label }}" (em Pedidos)</h3>
         </div>
-        <div class="card-body {% if placas_sc %}scrollable-list{% endif %}"> {# Adiciona scroll apenas se houver itens #}
+        <div class="card-body {% if placas_sc %}scrollable-list{% endif %}">
             {% if placas_sc %}
                 <ul class="plates-list">
                     {% for placa in placas_sc %}
                         <li class="plate-item">
                             <span class="plate-text"><i class="fas fa-barcode text-muted mr-2"></i>{{ placa }}</span>
-                            {# Link para o relatório de cobranças filtrado pela placa específica e status "S/ Cobrança" #}
                             <a href="{{ url_for('relatorio_cobrancas', filtro_placa=placa, filtro_status=status_sem_cobranca_label) }}" 
                                class="btn btn-sm btn-outline-primary btn-action">
                                 <i class="fas fa-search"></i> Ver Detalhes
@@ -103,154 +99,42 @@
 
 {% block head_extra %}
 {{ super() }}
+{# Os estilos do dashboard já foram fornecidos e devem estar no style.css ou no dashboard_manutencao.html #}
+{# Se precisar de estilos específicos apenas para este dashboard, adicione aqui #}
 <style>
-    .dashboard-section {
-        margin-bottom: 2.5rem;
-    }
-    .dashboard-section-title {
-        font-size: 1.5rem; /* 24px */
-        color: var(--text-color);
-        margin-bottom: 1.5rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 2px solid var(--accent-color-light); /* Uma borda subtil para o título da secção */
-    }
-
-    /* Dashboard 1: Resumo Geral */
-    .dashboard-summary-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Colunas responsivas */
-        gap: 1.5rem;
-    }
-    .summary-metric-card {
-        background-color: var(--card-bg);
-        border: 1px solid var(--card-border-color);
-        border-radius: var(--border-radius-base);
-        padding: 1.5rem;
-        text-align: center;
-        box-shadow: var(--box-shadow-sm);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
-    }
-     .summary-metric-card:hover {
-        transform: translateY(-3px);
-        box-shadow: var(--card-hover-box-shadow);
-    }
-    .summary-metric-card.alert { /* Para destacar "Não Conforme" */
-        background-color: var(--flash-error-bg-L); 
-        border-color: var(--flash-error-border-L);
-    }
-    html[data-theme$="-dark"] .summary-metric-card.alert {
-        background-color: var(--flash-error-bg-D); 
-        border-color: var(--flash-error-border-D);
-    }
-    /* Texto dentro do card de alerta */
-    .summary-metric-card.alert .summary-metric-label,
-    .summary-metric-card.alert .summary-metric-value,
-    .summary-metric-card.alert .summary-metric-icon i, /* Alvo o ícone dentro do container */
-    .summary-metric-card.alert .summary-metric-link {
-        color: var(--flash-error-text-L); 
-    }
-    html[data-theme$="-dark"] .summary-metric-card.alert .summary-metric-label,
-    html[data-theme$="-dark"] .summary-metric-card.alert .summary-metric-value,
-    html[data-theme$="-dark"] .summary-metric-card.alert .summary-metric-icon i,
-    html[data-theme$="-dark"] .summary-metric-card.alert .summary-metric-link {
-        color: var(--flash-error-text-D); 
-    }
-
-
-    .summary-metric-icon {
-        font-size: 2.5rem; /* 40px */
-        color: var(--accent-color); /* Cor padrão para ícones dos outros cards */
-        margin-bottom: 1rem;
-    }
-    .summary-metric-value {
-        font-size: 2.25rem; /* 36px */
-        font-weight: 700;
-        color: var(--text-color); /* Cor padrão para valores */
-        line-height: 1.1;
-    }
-    .summary-metric-label {
-        font-size: 0.9375rem; /* 15px */
-        color: var(--text-muted-color); /* Cor padrão para labels */
-        margin-bottom: 1rem;
-        min-height: 2.5em; 
-    }
-    .summary-metric-link {
-        font-size: 0.875rem;
-        color: var(--link-color); /* Cor padrão para links */
-        text-decoration: none;
-        font-weight: 500;
-        margin-top: auto; 
-    }
-    .summary-metric-link:hover {
-        color: var(--link-hover-color);
-        text-decoration: underline;
-    }
-     .summary-metric-card.alert .summary-metric-link:hover {
-        /* A cor já é definida acima para .alert */
-        text-decoration: underline;
-    }
-
-
-    /* Dashboard 2 e 3: Listas */
-    .list-group-item {
-        background-color: transparent; 
-        border-color: var(--table-border-color); /* Consistência com bordas de tabela */
-        padding: 0.85rem 1.25rem;
-        /* Para o d-flex funcionar bem */
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .list-group-item:first-child {
-        border-top-left-radius: 0; /* Remove arredondamento se dentro de um card-body sem padding */
-        border-top-right-radius: 0;
-    }
-    .list-group-item:last-child {
-        border-bottom-left-radius: 0;
-        border-bottom-right-radius: 0;
-        border-bottom-width: 0; 
-    }
-    .list-group-item .badge { 
-        font-size: 0.8em;
-        padding: 0.4em 0.6em;
-    }
-    .list-group-item .btn-sm {
-        padding: 0.2rem 0.5rem;
-        font-size: 0.75rem;
-    }
-    /* Classes utilitárias (algumas podem já existir no style.css principal) */
-    .d-flex { display: flex !important; }
-    .justify-content-between { justify-content: space-between !important; }
-    .align-items-center { align-items: center !important; }
-    .ml-2 { margin-left: 0.5rem !important; }
-    .mr-2 { margin-right: 0.5rem !important; }
+    /* Estilos específicos para dashboard.html, se houver, podem ir aqui */
+    /* A maioria dos estilos já deve estar no style.css ou no dashboard_manutencao.html */
+    .dashboard-section { margin-bottom: 2.5rem; }
+    .dashboard-section-title { font-size: 1.5rem; color: var(--text-color); margin-bottom: 1.5rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--accent-color-light); }
+    .dashboard-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+    .summary-metric-card { background-color: var(--card-bg); border: 1px solid var(--card-border-color); border-radius: var(--border-radius-base); padding: 1.5rem; text-align: center; box-shadow: var(--box-shadow-sm); display: flex; flex-direction: column; align-items: center; transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;}
+    .summary-metric-card:hover { transform: translateY(-3px); box-shadow: var(--card-hover-box-shadow); }
+    .summary-metric-card.alert { background-color: var(--flash-error-bg-L); border-color: var(--flash-error-border-L); }
+    html[data-theme$="-dark"] .summary-metric-card.alert { background-color: var(--flash-error-bg-D); border-color: var(--flash-error-border-D); }
+    html[data-theme$="-dark"] .summary-metric-card.alert .summary-metric-label, html[data-theme$="-dark"] .summary-metric-card.alert .summary-metric-value, html[data-theme$="-dark"] .summary-metric-card.alert .summary-metric-icon i, html[data-theme$="-dark"] .summary-metric-card.alert .summary-metric-link { color: var(--flash-error-text-D); }
+    .summary-metric-card.alert .summary-metric-label, .summary-metric-card.alert .summary-metric-value, .summary-metric-card.alert .summary-metric-icon i, .summary-metric-card.alert .summary-metric-link { color: var(--flash-error-text-L); }
+    .summary-metric-icon { font-size: 2.5rem; color: var(--accent-color); margin-bottom: 1rem; }
+    .summary-metric-value { font-size: 2.25rem; font-weight: 700; color: var(--text-color); line-height: 1.1; }
+    .summary-metric-label { font-size: 0.9375rem; color: var(--text-muted-color); margin-bottom: 1rem; min-height: 2.5em; }
+    .summary-metric-link { font-size: 0.875rem; color: var(--link-color); text-decoration: none; font-weight: 500; margin-top: auto; }
+    .summary-metric-link:hover { color: var(--link-hover-color); text-decoration: underline; }
+    .list-group-item { background-color: transparent; border-color: var(--table-border-color); padding: 0.85rem 1.25rem; display: flex; justify-content: space-between; align-items: center; }
+    .list-group-item:first-child { border-top-left-radius: 0; border-top-right-radius: 0; }
+    .list-group-item:last-child { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-width: 0; }
+    .list-group-item .badge { font-size: 0.8em; padding: 0.4em 0.6em; }
+    .list-group-item .btn-sm { padding: 0.2rem 0.5rem; font-size: 0.75rem; }
+    .d-flex { display: flex !important; } .justify-content-between { justify-content: space-between !important; } .align-items-center { align-items: center !important; }
+    .ml-2 { margin-left: 0.5rem !important; } .mr-2 { margin-right: 0.5rem !important; }
     .text-muted { color: var(--text-muted-color) !important; }
     .text-success { color: var(--flash-success-text-L) !important; }
     html[data-theme$="-dark"] .text-success { color: var(--flash-success-text-D) !important; }
-
-
-    .scrollable-list { 
-        max-height: 350px; 
-        overflow-y: auto;
-        padding-right: 0.5rem; /* Espaço para a barra de scroll não sobrepor conteúdo */
-    }
+    .scrollable-list { max-height: 350px; overflow-y: auto; padding-right: 0.5rem; }
     .plates-list { list-style: none; padding: 0; margin: 0; }
-    .plate-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.85rem 0.25rem; 
-        border-bottom: 1px solid var(--table-border-color);
-    }
+    .plate-item { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 0.25rem; border-bottom: 1px solid var(--table-border-color); }
     .plate-item:last-child { border-bottom: none; }
     .plate-text { color: var(--text-color); font-weight: 500; }
     .plate-item .btn-action { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
-    
     .empty-state { text-align: center; padding: 2rem; color: var(--text-muted-color); }
     .empty-icon { font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.6; }
-
 </style>
 {% endblock %}

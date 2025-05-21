@@ -1,85 +1,162 @@
 {% extends "base.html" %}
 
-{% block title %}Página Inicial{% endblock %}
+{% block title %}Bem-vindo ao Pólis{% endblock %}
 
 {% block content %}
-<div class="home-hero">
-    <h2 class="home-hero-title">PÓLIS GESTÃO INTELIGENTE</h2>
-    <p class="home-hero-subtitle">Sistema de Monitoramento e Análise de Dados.</p>
+<div class="page-header text-center">
+    <h2 class="page-title">Bem-vindo ao Sistema Pólis</h2>
+    <p class="home-hero-subtitle" style="font-size: 1.1rem; color: var(--text-muted-color);">Selecione uma das opções abaixo para começar ou gerir o sistema.</p>
 </div>
 
-<div class="home-actions-grid">
+<div class="home-actions-grid" style="margin-top: 1rem;">
+    {# Ações Principais #}
     <div class="action-card">
         <div class="action-card-icon">
-            <i class="fas fa-database fa-3x"></i>
+            <i class="fas fa-sitemap fa-3x"></i>
         </div>
-        <h3 class="action-card-title">Inserção de Dados</h3>
-        <p class="action-card-description">Importe e processe dados de cobranças e pendências diretamente no sistema com precisão.</p>
-        <a href="{{ url_for('inserir_dados') }}" class="btn btn-primary btn-lg action-card-button">
-            <i class="fas fa-file-import"></i> Iniciar Importação
+        <h3 class="action-card-title">Mundo de OS & Dashboards</h3>
+        <p class="action-card-description">Escolha o tipo de análise (Pedido ou OS) e aceda aos dashboards correspondentes.</p>
+        <a href="{{ url_for('mundo_os') }}" class="btn btn-primary btn-lg action-card-button">
+            <i class="fas fa-chart-pie"></i> Aceder Análises
         </a>
     </div>
 
     <div class="action-card">
         <div class="action-card-icon">
-            <i class="fas fa-chart-line fa-3x"></i>
+            <i class="fas fa-file-invoice-dollar fa-3x"></i>
         </div>
-        <h3 class="action-card-title">Relatórios e Análises</h3>
-        <p class="action-card-description">Consulte, filtre e analise os dados cadastrados de forma dinâmica e eficiente.</p>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg action-card-button">
-            <i class="fas fa-search"></i> Aceder Relatórios
+        <h3 class="action-card-title">Relatório de Cobranças</h3>
+        <p class="action-card-description">Consulte e filtre todos os dados de cobranças registados no sistema.</p>
+        <a href="{{ url_for('relatorio_cobrancas') }}" class="btn btn-primary btn-lg action-card-button">
+            <i class="fas fa-list-alt"></i> Ver Relatório
         </a>
     </div>
+
+    <div class="action-card">
+        <div class="action-card-icon">
+            <i class="fas fa-clipboard-list fa-3x"></i>
+        </div>
+        <h3 class="action-card-title">Relatório de Pendências</h3>
+        <p class="action-card-description">Visualize e filtre todas as pendências financeiras e operacionais.</p>
+        <a href="{{ url_for('relatorio_pendentes') }}" class="btn btn-primary btn-lg action-card-button">
+            <i class="fas fa-list-alt"></i> Ver Relatório
+        </a>
+    </div>
+    
+    <div class="action-card">
+        <div class="action-card-icon">
+            <i class="fas fa-file-upload fa-3x"></i>
+        </div>
+        <h3 class="action-card-title">Inserir Dados</h3>
+        <p class="action-card-description">Importe novas planilhas de cobranças ou pendências para o sistema.</p>
+        <a href="{{ url_for('inserir_dados') }}" class="btn btn-info btn-lg action-card-button"> 
+            <i class="fas fa-upload"></i> Importar Ficheiros
+        </a>
+    </div>
+
+    {# Novas Ações de Gestão/Conta #}
+    <div class="action-card">
+        <div class="action-card-icon">
+            <i class="fas fa-user-shield fa-3x"></i>
+        </div>
+        <h3 class="action-card-title">Alterar Senha</h3>
+        <p class="action-card-description">Mantenha a sua conta segura atualizando a sua senha regularmente.</p>
+        <a href="{{ url_for('change_password') }}" class="btn btn-secondary btn-lg action-card-button"> {# Botão Secundário #}
+            <i class="fas fa-key"></i> Modificar Senha
+        </a>
+    </div>
+
+    {% if current_user.username in ADMIN_USERNAMES %}
+    <div class="action-card">
+        <div class="action-card-icon">
+            <i class="fas fa-user-plus fa-3x"></i>
+        </div>
+        <h3 class="action-card-title">Adicionar Utilizador</h3>
+        <p class="action-card-description">Crie novas contas de utilizador para acesso ao sistema (Administração).</p>
+        <a href="{{ url_for('add_user_admin') }}" class="btn btn-secondary btn-lg action-card-button">
+            <i class="fas fa-user-edit"></i> Gerir Utilizadores
+        </a>
+    </div>
+
+    <div class="action-card">
+        <div class="action-card-icon">
+            <i class="fas fa-history fa-3x"></i>
+        </div>
+        <h3 class="action-card-title">Log de Auditoria</h3>
+        <p class="action-card-description">Consulte o registo de todas as ações importantes realizadas no sistema (Administração).</p>
+        <a href="{{ url_for('view_audit_log') }}" class="btn btn-secondary btn-lg action-card-button">
+            <i class="fas fa-search-location"></i> Ver Logs
+        </a>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block head_extra %}
 {{ super() }}
 <style>
-    .home-hero {
-        text-align: center;
-        padding: 3rem 1rem;
-        margin-bottom: 2rem;
+    .page-header.text-center .page-title { display: block; border-bottom: none; margin-bottom: 0.5rem; }
+    .home-hero-subtitle { margin-bottom: 2.5rem; }
+    .home-actions-grid { 
+        display: grid; 
+        /* Ajustado para ter no máximo 3 colunas, mas ser responsivo */
+        grid-template-columns: repeat(auto-fit, minmax(min(100%/1, 300px), 1fr)); 
+        gap: 1.5rem; 
+        margin-bottom: 3rem; 
     }
-    .home-hero-title {
-        font-size: 2.75rem; 
-        font-weight: 700;
-        color: var(--accent-color); 
-        margin-bottom: 0.75rem;
+    .action-card { 
+        background-color: var(--card-bg); 
+        border-radius: var(--border-radius-base); 
+        box-shadow: var(--card-box-shadow); 
+        padding: 1.75rem; 
+        text-align: center; 
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; 
     }
-    .home-hero-subtitle {
-        font-size: 1.25rem;
-        color: var(--text-muted-color);
-        margin-bottom: 2rem;
-        max-width: 600px;
-        margin-left: auto;
-        margin-right: auto;
+    .action-card:hover { 
+        transform: translateY(-5px); 
+        box-shadow: var(--card-hover-box-shadow); 
     }
-    .home-actions-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
-        gap: 2rem; 
-        margin-bottom: 3rem;
-    }
-    .action-card {
-        background-color: var(--card-bg);
-        border-radius: var(--border-radius-base);
-        box-shadow: var(--card-box-shadow);
-        padding: 2rem;
-        text-align: center;
-        display: flex;
-        flex-direction: column;
+    .action-card-icon { color: var(--accent-color); margin-bottom: 1.25rem; }
+    .action-card-icon .fas { font-size: 2.5rem; }
+    .action-card-title { font-size: 1.25rem; color: var(--text-color); margin-bottom: 0.75rem; font-weight: 600; }
+    .action-card-description { 
+        font-size: 0.875rem; 
+        color: var(--text-muted-color); 
+        margin-bottom: 1.5rem; 
+        flex-grow: 1; 
+        min-height: 4.5em; /* Aumentado para mais espaço para descrição */
+        display: flex; /* Para centralizar verticalmente se o texto for curto */
         align-items: center;
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        justify-content: center;
     }
-    .action-card:hover {
-        transform: translateY(-5px);
-        box-shadow: var(--card-hover-box-shadow);
+    .action-card-button.btn-lg { 
+        padding: 0.6rem 1.2rem; 
+        font-size: 0.9rem; 
+        width: 90%; /* Ajustado para melhor responsividade */
+        max-width: 280px; /* Aumentado um pouco */
+        margin-top: auto; /* Garante que o botão fica em baixo */
     }
-    .action-card-icon { color: var(--accent-color); margin-bottom: 1.5rem; }
-    .action-card-icon .fas { font-size: 3rem; }
-    .action-card-title { font-size: 1.5rem; color: var(--text-color); margin-bottom: 0.75rem; font-weight: 600; }
-    .action-card-description { font-size: 0.95rem; color: var(--text-muted-color); margin-bottom: 1.5rem; flex-grow: 1; }
-    .action-card-button.btn-lg { padding: 0.75rem 1.5rem; font-size: 1rem; width: 80%; max-width: 250px; }
+
+    /* Ajuste para quando houver 2 ou 4 cartões por linha para melhor preenchimento */
+    @media (min-width: 680px) and (max-width: 991px) { /* Telas médias, força 2 colunas */
+        .home-actions-grid {
+             grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @media (min-width: 992px) { /* Telas grandes, permite até 3 colunas */
+         .home-actions-grid {
+            grid-template-columns: repeat(auto-fit, minmax(min(100%/2, 320px), 1fr)); /* Máximo de 3 colunas */
+        }
+    }
+     @media (min-width: 1200px) { /* Telas extra grandes, pode ir até 4 se couber */
+         .home-actions-grid {
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+    }
+
+
 </style>
 {% endblock %}

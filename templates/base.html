@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-br" data-theme="azul-transac-light">
+<html lang="pt-br" data-theme="dia"> {# Tema padrão inicial: Dia #}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,12 +8,45 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     {% block head_extra %}
     <style>
-        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0;}
-        .nav-icon-theme { font-size: 1.1rem; color: var(--text-muted-color); }
-        html[data-theme$="-dark"] .nav-icon-theme { color: var(--text-muted-color); }
+        .sr-only { 
+            position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; 
+            overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0;
+        }
+        .nav-icon-theme { 
+            font-size: 1.1rem; color: var(--text-muted-color); 
+        }
+        html[data-theme="noite"] .nav-icon-theme { /* Garante que o ícone da paleta também se adapte ao tema escuro */
+             color: var(--text-muted-color);
+        }
+        .page-actions { 
+            margin-bottom: 1.5rem; 
+            display: flex; 
+            justify-content: flex-start; 
+            align-items: center; 
+        }
+        .btn-voltar {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.4rem 0.8rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-muted-color);
+            background-color: transparent;
+            border: 1px solid var(--input-border-color);
+            border-radius: var(--border-radius-base);
+            text-decoration: none;
+            transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+        }
+        .btn-voltar .fas { margin-right: 0.5em; }
+        .btn-voltar:hover {
+            color: var(--text-color);
+            background-color: var(--table-hover-bg); 
+            border-color: var(--input-focus-border-color);
+        }
     </style>
     {% endblock %}
 </head>
@@ -21,9 +54,12 @@
     <header class="app-header">
         <div class="app-header-content container">
             <div class="app-header-brand">
-                <img src="{{ url_for('static', filename='images/polis_logo.png') }}" alt="Logótipo Pólis" class="app-logo-img">
-                <h1>Pólis</h1>
+                <a href="{{ url_for('home') }}" style="display: contents; text-decoration: none;">
+                    <img src="{{ url_for('static', filename='images/polis_logo.png') }}" alt="Logótipo Pólis" class="app-logo-img">
+                    <h1>Pólis</h1>
+                </a>
             </div>
+            
             <div class="nav-actions">
                 {% if current_user.is_authenticated %}
                 <div class="user-info">
@@ -31,15 +67,14 @@
                      <a href="{{ url_for('logout') }}" class="logout-link" title="Sair"><i class="fas fa-sign-out-alt"></i> <span class="sr-only">Logout</span></a>
                 </div>
                 {% endif %}
+                
                 <div class="theme-selector-container">
                     <label for="theme-select" class="sr-only">Selecionar Tema</label>
                     <i class="fas fa-palette nav-icon-theme" aria-hidden="true"></i>
                     <select id="theme-select" title="Selecionar Tema Visual">
-                        <optgroup label="Azul Transac"><option value="azul-transac-light">Azul Transac - Claro</option><option value="azul-transac-dark">Azul Transac - Escuro</option></optgroup>
-                        <optgroup label="Pólis Azure (Original)"><option value="polis-azure-light">Azure Claro</option><option value="polis-azure-dark">Azure Escuro</option></optgroup>
-                        <optgroup label="Ethos Urbano"><option value="ethos-urbano-light">Urbano - Dia</option><option value="ethos-urbano-dark">Urbano - Noite</option></optgroup>
-                        <optgroup label="Oásis Digital"><option value="oasis-digital-light">Oásis - Alvorada</option><option value="oasis-digital-dark">Oásis - Crepúsculo</option></optgroup>
-                        <optgroup label="Ciber Prisma"><option value="ciber-prisma-light">Prisma - Espectro</option><option value="ciber-prisma-dark">Prisma - Vácuo</option></optgroup>
+                        {# Opções simplificadas para Dia e Noite #}
+                        <option value="dia">Pólis Dia</option>
+                        <option value="noite">Pólis Noite</option>
                     </select>
                 </div>
             </div>
@@ -49,13 +84,12 @@
     {% if current_user.is_authenticated %}
     <nav class="main-nav">
         <div class="main-nav-links container">
-            {# O link "Home" agora pode ser o "Mundo de OS" ou um link para /mundo-os #}
-            <a href="{{ url_for('mundo_os') }}" class="nav-item {{ 'active' if request.endpoint == 'mundo_os' or request.endpoint == 'home' else '' }}"><i class="fas fa-globe-americas"></i> Mundo de OS</a>
-            {# O link Dashboard original (dashboard_pedidos) é acedido através do Mundo de OS #}
-            {# <a href="{{ url_for('dashboard_pedidos') }}" class="nav-item {{ 'active' if request.endpoint == 'dashboard_pedidos' else '' }}"><i class="fas fa-tachometer-alt"></i> Dashboard Pedidos</a> #}
-            <a href="{{ url_for('inserir_dados') }}" class="nav-item {{ 'active' if request.endpoint == 'inserir_dados' else '' }}"><i class="fas fa-file-upload"></i> Inserir Dados</a>
+            <a href="{{ url_for('home') }}" class="nav-item {{ 'active' if request.endpoint == 'home' else '' }}"><i class="fas fa-home"></i> Home Pólis</a>
+            <a href="{{ url_for('mundo_os') }}" class="nav-item {{ 'active' if request.endpoint == 'mundo_os' or request.endpoint == 'dashboard_pedidos' or request.endpoint == 'dashboard_manutencao' else '' }}"><i class="fas fa-sitemap"></i> Mundo de OS & Dashboards</a>
             <a href="{{ url_for('relatorio_cobrancas') }}" class="nav-item {{ 'active' if request.endpoint == 'relatorio_cobrancas' else '' }}"><i class="fas fa-file-invoice-dollar"></i> Rel. Cobranças</a>
             <a href="{{ url_for('relatorio_pendentes') }}" class="nav-item {{ 'active' if request.endpoint == 'relatorio_pendentes' else '' }}"><i class="fas fa-clipboard-list"></i> Rel. Pendentes</a>
+            <a href="{{ url_for('inserir_dados') }}" class="nav-item {{ 'active' if request.endpoint == 'inserir_dados' else '' }}"><i class="fas fa-file-upload"></i> Inserir Dados</a>
+            
             <div class="nav-item-group-right">
                 <a href="{{ url_for('change_password') }}" class="nav-item {{ 'active' if request.endpoint == 'change_password' else '' }}"><i class="fas fa-user-shield"></i> Alterar Senha</a>
                 {% if current_user.username in ADMIN_USERNAMES %}
@@ -68,6 +102,14 @@
     {% endif %}
 
     <main class="container content-wrapper">
+        {% if pagina_anterior_url %}
+            <div class="page-actions">
+                <a href="{{ pagina_anterior_url }}" class="btn-voltar">
+                    <i class="fas fa-arrow-left"></i> {{ pagina_anterior_texto | default('Voltar') }}
+                </a>
+            </div>
+        {% endif %}
+
         {% block before_flash_messages %}{% endblock %}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -78,6 +120,7 @@
                 </ul>
             {% endif %}
         {% endwith %}
+        
         {% block content %}{% endblock %}
     </main>
 
@@ -89,22 +132,34 @@
         (function() {
             const themeSelect = document.getElementById('theme-select');
             const htmlEl = document.documentElement;
-            const storageKey = 'polisAppPreferredTheme_v3'; 
+            const storageKey = 'polisAppPreferredTheme_v4'; // Nova chave para o tema único
+
             function applyTheme(themeName) {
                 if (themeName) {
-                    htmlEl.setAttribute('data-theme', themeName);
+                    htmlEl.setAttribute('data-theme', themeName); // Define "dia" ou "noite"
                     localStorage.setItem(storageKey, themeName);
-                    if (themeSelect && themeSelect.value !== themeName) { themeSelect.value = themeName; }
+                    if (themeSelect && themeSelect.value !== themeName) {
+                        themeSelect.value = themeName;
+                    }
                 }
             }
+
             let preferredTheme = localStorage.getItem(storageKey);
             if (!preferredTheme) {
-                const defaultBaseTheme = 'azul-transac'; 
-                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) { preferredTheme = defaultBaseTheme + '-dark'; }
-                else { preferredTheme = defaultBaseTheme + '-light'; }
+                // Padrão para "dia", mas verifica preferência do sistema para "noite"
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    preferredTheme = 'noite';
+                } else {
+                    preferredTheme = 'dia'; // Padrão para claro
+                }
             }
             applyTheme(preferredTheme); 
-            if (themeSelect) { themeSelect.addEventListener('change', function() { applyTheme(this.value); }); }
+
+            if (themeSelect) {
+                themeSelect.addEventListener('change', function() {
+                    applyTheme(this.value); // "dia" ou "noite"
+                });
+            }
         })();
     </script>
     {% block scripts_extra %}{% endblock %}
