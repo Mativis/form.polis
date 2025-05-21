@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard de Manutenção (OS) - Pólis{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2 class="page-title"><i class="fas fa-tools"></i> Dashboard de Manutenção (por OS)</h2>
+</div>
+
+{# Dashboard 1: Resumo Geral de OS #}
+<div class="dashboard-section">
+    <h3 class="dashboard-section-title">Resumo Geral de Ordens de Serviço</h3>
+    <div class="dashboard-summary-grid">
+        <div class="summary-metric-card">
+            <div class="summary-metric-icon"><i class="fas fa-exclamation-circle"></i></div>
+            <div class="summary-metric-value">{{ count_os_sem_cobranca }}</div>
+            <div class="summary-metric-label">OS S/ Cobrança Lançada</div>
+            <a href="{{ url_for('relatorio_cobrancas', filtro_status=status_os_sem_cobranca_label) }}" class="summary-metric-link">Ver Detalhes <i class="fas fa-angle-right"></i></a>
+        </div>
+        <div class="summary-metric-card">
+            <div class="summary-metric-icon"><i class="fas fa-check-circle"></i></div>
+            <div class="summary-metric-value">{{ count_total_os_lancadas }}</div>
+            <div class="summary-metric-label">Total de OS Lançadas</div>
+            <a href="{{ url_for('relatorio_cobrancas', filtro_status='Com cobrança') }}" class="summary-metric-link">Ver Todas <i class="fas fa-angle-right"></i></a>
+        </div>
+        <div class="summary-metric-card alert">
+            <div class="summary-metric-icon"><i class="fas fa-wrench"></i></div> {# Ícone diferente para "OS para verificar" #}
+            <div class="summary-metric-value">{{ count_os_para_verificar }}</div>
+            <div class="summary-metric-label">OS para Verificar (Conformidade)</div>
+            <a href="{{ url_for('relatorio_cobrancas', filtro_conformidade='Verificar') }}" class="summary-metric-link">Ver Detalhes <i class="fas fa-angle-right"></i></a>
+        </div>
+    </div>
+</div>
+
+{# Dashboard 2: OS S/ Cobrança por Filial #}
+<div class="dashboard-section">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-store-alt"></i> OS S/ Cobrança por Filial</h3>
+        </div>
+        <div class="card-body">
+            {% if os_sc_por_filial %}
+                <ul class="list-group list-group-flush">
+                    {% for item in os_sc_por_filial %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>
+                            <i class="fas fa-map-marker-alt text-muted mr-2"></i>{{ item.filial | default('Filial Desconhecida') }}
+                        </span>
+                        <div>
+                            <span class="badge badge-warning badge-pill mr-2">{{ item.count_os }} OS</span> {# Alterado para count_os #}
+                            <a href="{{ url_for('relatorio_cobrancas', filtro_filial=item.filial, filtro_status=status_os_sem_cobranca_label) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-search"></i> Ver OS
+                            </a>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-check-circle empty-icon text-success"></i>
+                    <p>Nenhuma OS com status "{{ status_os_sem_cobranca_label }}" encontrada para agrupar por filial.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# Dashboard 3: Placas com OS S/ Cobrança (Opcional ou Adaptar) #}
+{# Se a lógica de 'placas_os_sc' for a mesma de 'placas_sc' (baseada no status geral), pode ser mantida. #}
+{# Se precisar de uma lógica específica de placas associadas a OS sem cobrança, a função no backend precisaria ser ajustada. #}
+<div class="dashboard-section">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-truck-moving"></i> Placas com OS de Status "{{ status_os_sem_cobranca_label }}"</h3>
+        </div>
+        <div class="card-body {% if placas_os_sc %}scrollable-list{% endif %}">
+            {% if placas_os_sc %}
+                <ul class="plates-list">
+                    {% for placa in placas_os_sc %}
+                        <li class="plate-item">
+                            <span class="plate-text"><i class="fas fa-barcode text-muted mr-2"></i>{{ placa }}</span>
+                            <a href="{{ url_for('relatorio_cobrancas', filtro_placa=placa, filtro_status=status_os_sem_cobranca_label) }}" 
+                               class="btn btn-sm btn-outline-primary btn-action">
+                                <i class="fas fa-search"></i> Ver Detalhes
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-car empty-icon"></i>
+                    <p>Nenhuma placa encontrada para OS com status "{{ status_os_sem_cobranca_label }}".</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block head_extra %}
+{{ super() }}
+{# Reutilizar os estilos do dashboard.html original, pois a estrutura é similar #}
+<style>
+    .dashboard-section { margin-bottom: 2.5rem; }
+    .dashboard-section-title { font-size: 1.5rem; color: var(--text-color); margin-bottom: 1.5rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--accent-color-light); }
+    .dashboard-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+    .summary-metric-card { background-color: var(--card-bg); border: 1px solid var(--card-border-color); border-radius: var(--border-radius-base); padding: 1.5rem; text-align: center; box-shadow: var(--box-shadow-sm); display: flex; flex-direction: column; align-items: center; transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;}
+    .summary-metric-card:hover { transform: translateY(-3px); box-shadow: var(--card-hover-box-shadow); }
+    .summary-metric-card.alert { background-color: var(--flash-error-bg-L); border-color: var(--flash-error-border-L); }
+    html[data-theme$="-dark"] .summary-metric-card.alert { background-color: var(--flash-error-bg-D); border-color: var(--flash-error-border-D); }
+    html[data-theme$="-dark"] .summary-metric-card.alert .summary-metric-label, html[data-theme$="-dark"] .summary-metric-card.alert .summary-metric-value, html[data-theme$="-dark"] .summary-metric-card.alert .summary-metric-icon i, html[data-theme$="-dark"] .summary-metric-card.alert .summary-metric-link { color: var(--flash-error-text-D); }
+    .summary-metric-card.alert .summary-metric-label, .summary-metric-card.alert .summary-metric-value, .summary-metric-card.alert .summary-metric-icon i, .summary-metric-card.alert .summary-metric-link { color: var(--flash-error-text-L); }
+    .summary-metric-icon { font-size: 2.5rem; color: var(--accent-color); margin-bottom: 1rem; }
+    .summary-metric-value { font-size: 2.25rem; font-weight: 700; color: var(--text-color); line-height: 1.1; }
+    .summary-metric-label { font-size: 0.9375rem; color: var(--text-muted-color); margin-bottom: 1rem; min-height: 2.5em; }
+    .summary-metric-link { font-size: 0.875rem; color: var(--link-color); text-decoration: none; font-weight: 500; margin-top: auto; }
+    .summary-metric-link:hover { color: var(--link-hover-color); text-decoration: underline; }
+    .list-group-item { background-color: transparent; border-color: var(--table-border-color); padding: 0.85rem 1.25rem; display: flex; justify-content: space-between; align-items: center; }
+    .list-group-item:first-child { border-top-left-radius: 0; border-top-right-radius: 0; }
+    .list-group-item:last-child { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-width: 0; }
+    .list-group-item .badge { font-size: 0.8em; padding: 0.4em 0.6em; }
+    .list-group-item .btn-sm { padding: 0.2rem 0.5rem; font-size: 0.75rem; }
+    .d-flex { display: flex !important; } .justify-content-between { justify-content: space-between !important; } .align-items-center { align-items: center !important; }
+    .ml-2 { margin-left: 0.5rem !important; } .mr-2 { margin-right: 0.5rem !important; }
+    .text-muted { color: var(--text-muted-color) !important; }
+    .text-success { color: var(--flash-success-text-L) !important; }
+    html[data-theme$="-dark"] .text-success { color: var(--flash-success-text-D) !important; }
+    .scrollable-list { max-height: 350px; overflow-y: auto; padding-right: 0.5rem; }
+    .plates-list { list-style: none; padding: 0; margin: 0; }
+    .plate-item { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 0.25rem; border-bottom: 1px solid var(--table-border-color); }
+    .plate-item:last-child { border-bottom: none; }
+    .plate-text { color: var(--text-color); font-weight: 500; }
+    .plate-item .btn-action { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
+    .empty-state { text-align: center; padding: 2rem; color: var(--text-muted-color); }
+    .empty-icon { font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.6; }
+</style>
+{% endblock %}

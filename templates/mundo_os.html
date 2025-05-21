@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Mundo de OS - Pólis{% endblock %}
+
+{% block content %}
+<div class="page-header text-center"> {# Adicionado text-center para centralizar o título da página #}
+    <h2 class="page-title"><i class="fas fa-sitemap"></i> Mundo de OS - Escolha sua Análise</h2>
+</div>
+
+<div class="home-actions-grid" style="margin-top: 2rem;"> {# Reutilizando a classe da home para layout similar #}
+    <div class="action-card">
+        <div class="action-card-icon">
+            <i class="fas fa-file-alt fa-3x"></i> {# Ícone para Pedido #}
+        </div>
+        <h3 class="action-card-title">Análise por Pedido</h3>
+        <p class="action-card-description">Visualize o dashboard e relatórios com foco nos dados consolidados por Pedido.</p>
+        <a href="{{ url_for('dashboard_pedidos') }}" class="btn btn-primary btn-lg action-card-button">
+            <i class="fas fa-arrow-circle-right"></i> Dashboard de Pedidos
+        </a>
+    </div>
+
+    <div class="action-card">
+        <div class="action-card-icon">
+            <i class="fas fa-tools fa-3x"></i> {# Ícone para OS/Manutenção #}
+        </div>
+        <h3 class="action-card-title">Análise por OS</h3>
+        <p class="action-card-description">Aceda ao dashboard e informações com foco nos dados por Ordem de Serviço (Manutenção).</p>
+        <a href="{{ url_for('dashboard_manutencao') }}" class="btn btn-primary btn-lg action-card-button">
+            <i class="fas fa-arrow-circle-right"></i> Dashboard de Manutenção
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block head_extra %}
+{{ super() }}
+{# Reutilizar estilos da home.html para os cartões de ação #}
+<style>
+    .page-header.text-center .page-title {
+        display: block; /* Para que o text-align do pai funcione */
+        border-bottom: none; /* Remover borda se não quiser no título centralizado */
+        margin-bottom: 1rem;
+    }
+     .home-actions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); 
+        gap: 2rem; 
+        margin-bottom: 3rem;
+        margin-top: 1rem; /* Espaço após o título da página */
+    }
+    .action-card {
+        background-color: var(--card-bg);
+        border-radius: var(--border-radius-base);
+        box-shadow: var(--card-box-shadow);
+        padding: 2rem 1.5rem; /* Ajustar padding */
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+    .action-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--card-hover-box-shadow);
+    }
+    .action-card-icon { color: var(--accent-color); margin-bottom: 1.5rem; }
+    .action-card-icon .fas { font-size: 2.8rem; } /* Ajustar tamanho do ícone */
+    .action-card-title { font-size: 1.35rem; color: var(--text-color); margin-bottom: 0.75rem; font-weight: 600; }
+    .action-card-description { font-size: 0.9rem; color: var(--text-muted-color); margin-bottom: 1.5rem; flex-grow: 1; }
+    .action-card-button.btn-lg { padding: 0.65rem 1.25rem; font-size: 0.95rem; width: 90%; max-width: 280px; }
+</style>
+{% endblock %}
