@@ -35,12 +35,13 @@ from utils.excel_processor import (
     get_count_os_status_especifico,
     get_count_total_os_lancadas,
     get_count_os_para_verificar,
-    get_os_status_por_filial
+    get_os_status_por_filial,
+    get_os_com_status_especifico # NOVA FUNÇÃO IMPORTADA
 )
 
 app = Flask(__name__)
 
-# --- Configurações da Aplicação ---
+# --- Configurações da Aplicação (mantidas) ---
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(32))
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['DATABASE'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'polis_database.db')
@@ -49,7 +50,7 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' 
 ALLOWED_EXTENSIONS = {'xlsx', 'csv'}
 
-# --- Configuração do Logging ---
+# --- Configuração do Logging (mantida) ---
 log_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'polis_app.log')
 logging.basicConfig(
     level=logging.INFO,
@@ -60,7 +61,7 @@ logger = logging.getLogger(__name__)
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
-# --- Helpers de Conexão com Banco de Dados ---
+# --- Helpers de Conexão com Banco de Dados (mantidos) ---
 def get_db():
     db = getattr(g, '_database', None)
     if db is None: db = g._database = sqlite3.connect(app.config['DATABASE']); db.row_factory = sqlite3.Row
@@ -70,10 +71,10 @@ def close_connection(exception):
     db = getattr(g, '_database', None)
     if db is not None: db.close()
 
-# --- Configuração do Flask-Login ---
+# --- Configuração do Flask-Login (mantida) ---
 login_manager = LoginManager(); login_manager.init_app(app); login_manager.login_view = 'login'
 login_manager.login_message = "Por favor, faça login para aceder a esta página."; login_manager.login_message_category = "info"
-ADMIN_USERNAMES = ['admin', 'Splinter', 'Mativi'] # Certifique-se que os seus admins estão aqui
+ADMIN_USERNAMES = ['admin', 'Splinter', 'Mativi']
 class User(UserMixin):
     def __init__(self, id, username): self.id = id; self.username = username
 @login_manager.user_loader
@@ -88,7 +89,7 @@ def get_user_by_username_from_db(username):
         return cursor.fetchone()
     except Exception as e: logger.error(f"Erro ao buscar utilizador '{username}': {e}", exc_info=True); return None
 
-# --- Decoradores ---
+# --- Decoradores (mantidos) ---
 def admin_required(f):
     @wraps(f)
     @login_required
@@ -99,7 +100,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- Log de Auditoria ---
+# --- Log de Auditoria (mantido) ---
 def log_audit(action: str, details: str = None):
     try:
         db = get_db(); user_id = current_user.id if current_user and current_user.is_authenticated else None
@@ -111,7 +112,7 @@ def log_audit(action: str, details: str = None):
         db.commit(); logger.info(f"AUDIT_LOG: User '{username}' -> Action: {action}, Details: {details}")
     except Exception as e: logger.error(f"Erro ao logar auditoria (Action: {action}): {e}", exc_info=True)
 
-# --- Filtros e Processadores de Contexto Jinja ---
+# --- Filtros e Processadores de Contexto Jinja (mantidos) ---
 @app.context_processor
 def inject_global_vars(): return dict(current_year=datetime.now().year, ADMIN_USERNAMES=ADMIN_USERNAMES)
 @app.template_filter('format_currency')
@@ -143,14 +144,14 @@ def normalize_for_css(value):
     norm = norm.replace('ó', 'o').replace('ô', 'o').replace('õ', 'o').replace('ú', 'u').replace('ü', 'u')
     norm = re.sub(r'[^\w-]', '', norm); norm = re.sub(r'-+', '-', norm).strip('-'); return norm if norm else 'desconhecido'
 
-# --- Headers de Segurança ---
+# --- Headers de Segurança (mantidos) ---
 @app.after_request
 def add_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'; response.headers['X-Frame-Options'] = 'SAMEORIGIN' 
     response.headers['X-XSS-Protection'] = '1; mode=block'; response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     return response
 
-# --- Rotas Principais e de Autenticação ---
+# --- Rotas Principais e de Autenticação (mantidas) ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated: return redirect(url_for('home'))
@@ -160,30 +161,23 @@ def login():
         user_data = get_user_by_username_from_db(username)
         if user_data and check_password_hash(user_data['password_hash'], password):
             login_user(User(id=user_data['id'], username=user_data['username'])); log_audit("LOGIN_SUCCESS", f"Utilizador '{username}' logado.")
-            flash('Login realizado com sucesso!', 'success'); next_page = request.args.get('next')
-            return redirect(next_page or url_for('home')) # Redireciona para a nova home após login
+            flash('Login realizado com sucesso!', 'success'); next_page = request.args.get('next'); return redirect(next_page or url_for('home')) 
         else: log_audit("LOGIN_FAILURE", f"Tentativa login falhou para '{username}'."); flash('Utilizador ou senha inválidos.', 'error')
     return render_template('login.html')
-
 @app.route('/logout')
 @login_required
 def logout():
     username_logged_out = current_user.username; logout_user(); log_audit("LOGOUT", f"Utilizador '{username_logged_out}' deslogado.")
     flash('Você foi desconectado com sucesso.', 'success'); return redirect(url_for('login'))
-
-@app.route('/') # NOVA ROTA HOME
+@app.route('/')
 @login_required
-def home(): 
-    return render_template('home.html') # Não precisa de 'pagina_anterior_url'
-
+def home(): return render_template('home.html')
 @app.route('/mundo-os') 
 @login_required
 def mundo_os():
-    return render_template('mundo_os.html', 
-                           pagina_anterior_url=url_for('home'), 
-                           pagina_anterior_texto="Home Pólis")
+    return render_template('mundo_os.html', pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
 
-# --- Rota de Inserção de Dados ---
+# --- Rota de Inserção de Dados (mantida) ---
 def allowed_file(filename): return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 @app.route('/inserir-dados', methods=['GET', 'POST'])
 @login_required
@@ -211,11 +205,9 @@ def inserir_dados():
                 try: os.remove(file_path)
                 except Exception as e_rem: logger.error(f"Erro ao remover '{file_path}': {e_rem}")
         return redirect(url_for('inserir_dados') + anchor)
-    return render_template('inserir_dados.html', 
-                           pagina_anterior_url=url_for('home'),
-                           pagina_anterior_texto="Home Pólis")
+    return render_template('inserir_dados.html', pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
 
-# --- Rotas de Administração ---
+# --- Rotas de Administração (mantidas) ---
 @app.route('/admin/add_user', methods=['GET', 'POST'])
 @admin_required
 def add_user_admin():
@@ -239,7 +231,6 @@ def add_user_admin():
             for error_msg in form_errors.values(): flash(error_msg, 'error')
         return render_template('admin/add_user.html', username=form_data.get('username',''), form_errors=form_errors, pagina_anterior_url=url_for('mundo_os'), pagina_anterior_texto="Mundo de OS")
     return render_template('admin/add_user.html', username='', form_errors={}, pagina_anterior_url=url_for('mundo_os'), pagina_anterior_texto="Mundo de OS")
-
 @app.route('/alterar-senha', methods=['GET', 'POST'])
 @login_required
 def change_password():
@@ -298,23 +289,27 @@ def dashboard_manutencao():
         count_total_os_lancadas = get_count_total_os_lancadas(db_path)
         count_os_para_verificar = get_count_os_para_verificar(db_path) 
         os_sc_por_filial = get_os_status_por_filial(status_os_sem_cobranca, db_path)
-        placas_os_sc = get_placas_status_especifico(status_os_sem_cobranca, db_path) 
+        # Adiciona a busca de OSs com status "Sem cobrança" para o novo painel
+        lista_os_sem_cobranca = get_os_com_status_especifico(status_os_sem_cobranca, db_path)
+
     except Exception as e:
         logger.error(f"Erro ao carregar dados para o dashboard de manutenção (OS): {e}", exc_info=True)
         flash("Erro ao carregar dados para o dashboard de manutenção (OS).", "error")
         count_os_sem_cobranca = 0; count_total_os_lancadas = 0; count_os_para_verificar = 0
-        os_sc_por_filial = []; placas_os_sc = []
+        os_sc_por_filial = []; lista_os_sem_cobranca = []
+    
     return render_template('dashboard_manutencao.html',
                            count_os_sem_cobranca=count_os_sem_cobranca,
                            count_total_os_lancadas=count_total_os_lancadas,
                            count_os_para_verificar=count_os_para_verificar,
                            os_sc_por_filial=os_sc_por_filial,
-                           placas_os_sc=placas_os_sc, 
+                           lista_os_sem_cobranca=lista_os_sem_cobranca, # Passa a nova lista
                            status_os_sem_cobranca_label=status_os_sem_cobranca,
                            pagina_anterior_url=url_for('mundo_os'),
                            pagina_anterior_texto="Mundo de OS")
 
-# --- CRUD para Cobranças ---
+
+# --- CRUD para Cobranças (mantido) ---
 @app.route('/cobranca/<int:cobranca_id>/edit', methods=['GET', 'POST'])
 @login_required 
 def edit_cobranca(cobranca_id):
@@ -345,7 +340,7 @@ def delete_cobranca_route(cobranca_id):
         else: log_audit("DELETE_COBRANCA_FAILURE", f"Falha ao apagar ID {cobranca_id}."); flash("Erro ao apagar.", "error")
     return redirect(url_for('relatorio_cobrancas'))
 
-# --- CRUD para Pendências ---
+# --- CRUD para Pendências (mantido) ---
 @app.route('/pendencia/<int:pendencia_id>/edit', methods=['GET', 'POST'])
 @login_required 
 def edit_pendencia(pendencia_id):
@@ -376,7 +371,7 @@ def delete_pendencia_route(pendencia_id):
         else: log_audit("DELETE_PENDENCIA_FAILURE", f"Falha ao apagar ID {pendencia_id}."); flash("Erro ao apagar pendência.", "error")
     return redirect(url_for('relatorio_pendentes'))
 
-# --- Relatórios ---
+# --- Relatórios (mantido com filtro de conformidade) ---
 @app.route('/relatorio-cobrancas')
 @login_required
 def relatorio_cobrancas():
@@ -400,7 +395,7 @@ def relatorio_pendentes():
         return render_template('relatorio_pendentes.html', pendentes=pendentes, filtros=filtros_form, distinct_status_pend=distinct_status_pend, distinct_fornecedores_pend=distinct_fornecedores_pend, distinct_filiais_pend=distinct_filiais_pend, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
     except Exception as e: logger.error(f"Erro relatório pendências: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_pendentes.html', pendentes=[], filtros=filtros_form, distinct_status_pend=[], distinct_fornecedores_pend=[], distinct_filiais_pend=[], pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
 
-# --- Rota de Visualização do Log de Auditoria (Admin) ---
+# --- Rota de Visualização do Log de Auditoria (Admin) (mantida) ---
 @app.route('/admin/audit_log')
 @admin_required
 def view_audit_log():
@@ -443,11 +438,9 @@ def imprimir_visualizacao_pendentes():
         pendentes_data = get_pendentes(filtros=filtros_query, db_name=app.config['DATABASE'])
         now_sp = datetime.now(pytz.timezone('America/Sao_Paulo')); data_geracao = now_sp.strftime('%d/%m/%Y %H:%M:%S')
         log_audit("VIEW_PRINT_PENDENCIAS", f"Filtros: {filtros_form}")
-        # Passa os filtros atuais para que o botão "Voltar" na página de impressão possa retornar ao relatório com os mesmos filtros
-        pagina_anterior_com_filtros = url_for('relatorio_pendentes', **request.args)
         return render_template('reports/pendentes_pdf.html', pendentes=pendentes_data, filtros=filtros_form, 
                                usuario_gerador=current_user.username, data_geracao=data_geracao,
-                               pagina_anterior_url=pagina_anterior_com_filtros, 
+                               pagina_anterior_url=url_for('relatorio_pendentes', **request.args), 
                                pagina_anterior_texto="Relatório de Pendências")
     except Exception as e: 
         logger.error(f"Erro ao gerar visualização para impressão de pendências: {e}",exc_info=True)

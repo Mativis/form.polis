@@ -3,8 +3,10 @@
 {% block title %}Dashboard de Manutenção (OS) - Pólis{% endblock %}
 
 {% block content %}
+{# O botão Voltar será renderizado pelo base.html se pagina_anterior_url for passado pela rota #}
+
 <div class="page-header">
-    <h2 class="page-title"><i class="fas fa-tools"></i> Dashboard de Cobranças OS</h2>
+    <h2 class="page-title"><i class="fas fa-tools"></i> Dashboard de Manutenção (por OS)</h2>
 </div>
 
 {# Dashboard 1: Resumo Geral de OS #}
@@ -13,20 +15,20 @@
     <div class="dashboard-summary-grid">
         <div class="summary-metric-card">
             <div class="summary-metric-icon"><i class="fas fa-exclamation-circle"></i></div>
-            <div class="summary-metric-value">{{ count_os_sem_cobranca }}</div>
-            <div class="summary-metric-label">OS sem cobrança Lançada</div>
+            <div class="summary-metric-value">{{ count_os_sem_cobranca | default('0') }}</div>
+            <div class="summary-metric-label">OS S/ Cobrança Lançada</div>
             <a href="{{ url_for('relatorio_cobrancas', filtro_status=status_os_sem_cobranca_label) }}" class="summary-metric-link">Ver Detalhes <i class="fas fa-angle-right"></i></a>
         </div>
         <div class="summary-metric-card">
             <div class="summary-metric-icon"><i class="fas fa-check-circle"></i></div>
-            <div class="summary-metric-value">{{ count_total_os_lancadas }}</div>
-            <div class="summary-metric-label">Total de OS lançadas</div>
+            <div class="summary-metric-value">{{ count_total_os_lancadas | default('0') }}</div>
+            <div class="summary-metric-label">Total de OS Lançadas</div>
             <a href="{{ url_for('relatorio_cobrancas', filtro_status='Com cobrança') }}" class="summary-metric-link">Ver Todas <i class="fas fa-angle-right"></i></a>
         </div>
         <div class="summary-metric-card alert">
-            <div class="summary-metric-icon"><i class="fas fa-wrench"></i></div> {# Ícone diferente para "OS para verificar" #}
-            <div class="summary-metric-value">{{ count_os_para_verificar }}</div>
-            <div class="summary-metric-label">OS para Verificar </div>
+            <div class="summary-metric-icon"><i class="fas fa-wrench"></i></div>
+            <div class="summary-metric-value">{{ count_os_para_verificar | default('0') }}</div>
+            <div class="summary-metric-label">OS para Verificar (Conformidade)</div>
             <a href="{{ url_for('relatorio_cobrancas', filtro_conformidade='Verificar') }}" class="summary-metric-link">Ver Detalhes <i class="fas fa-angle-right"></i></a>
         </div>
     </div>
@@ -36,7 +38,7 @@
 <div class="dashboard-section">
     <div class="card">
         <div class="card-header">
-            <h3 class="card-title"><i class="fas fa-store-alt"></i> OS sem cobrança por filial</h3>
+            <h3 class="card-title"><i class="fas fa-store-alt"></i> OS S/ Cobrança por Filial</h3>
         </div>
         <div class="card-body">
             {% if os_sc_por_filial %}
@@ -47,7 +49,7 @@
                             <i class="fas fa-map-marker-alt text-muted mr-2"></i>{{ item.filial | default('Filial Desconhecida') }}
                         </span>
                         <div>
-                            <span class="badge badge-warning badge-pill mr-2">{{ item.count_os }} OS</span> {# Alterado para count_os #}
+                            <span class="badge badge-warning badge-pill mr-2">{{ item.count_os }} OS</span>
                             <a href="{{ url_for('relatorio_cobrancas', filtro_filial=item.filial, filtro_status=status_os_sem_cobranca_label) }}" class="btn btn-sm btn-outline-primary">
                                 <i class="fas fa-search"></i> Ver OS
                             </a>
@@ -65,21 +67,29 @@
     </div>
 </div>
 
-{# Dashboard 3: Placas com OS S/ Cobrança (Opcional ou Adaptar) #}
-{# Se a lógica de 'placas_os_sc' for a mesma de 'placas_sc' (baseada no status geral), pode ser mantida. #}
-{# Se precisar de uma lógica específica de placas associadas a OS sem cobrança, a função no backend precisaria ser ajustada. #}
+{# NOVO DASHBOARD: OS Sem Cobrança (Lista de OS com link) #}
 <div class="dashboard-section">
     <div class="card">
         <div class="card-header">
-            <h3 class="card-title"><i class="fas fa-truck-moving"></i> Placas com OS de status "{{ status_os_sem_cobranca_label }}"</h3>
+            <h3 class="card-title"><i class="fas fa-list-ul"></i> OS com Status "{{ status_os_sem_cobranca_label }}"</h3>
         </div>
-        <div class="card-body {% if placas_os_sc %}scrollable-list{% endif %}">
-            {% if placas_os_sc %}
-                <ul class="plates-list">
-                    {% for placa in placas_os_sc %}
+        <div class="card-body {% if lista_os_sem_cobranca %}scrollable-list{% endif %}">
+            {% if lista_os_sem_cobranca %}
+                <ul class="plates-list"> {# Reutilizando a classe 'plates-list' para um estilo similar #}
+                    {% for item_os in lista_os_sem_cobranca %}
                         <li class="plate-item">
-                            <span class="plate-text"><i class="fas fa-barcode text-muted mr-2"></i>{{ placa }}</span>
-                            <a href="{{ url_for('relatorio_cobrancas', filtro_placa=placa, filtro_status=status_os_sem_cobranca_label) }}" 
+                            <span class="plate-text">
+                                <i class="fas fa-tools text-muted mr-2"></i>
+                                {% if item_os.os and item_os.os != 'N/A' %}
+                                    <a href="https://sistema.transac.com.br/aSistema/os/visualizar/id/{{ item_os.os }}" target="_blank" title="Visualizar OS no Transac: {{ item_os.os }}">
+                                        OS: {{ item_os.os }} <i class="fas fa-external-link-alt fa-xs"></i>
+                                    </a>
+                                {% else %}
+                                    OS: {{ item_os.os | default('N/A') }}
+                                {% endif %}
+                            </span>
+                            {# Link para o relatório de cobranças filtrado pela OS específica e status #}
+                            <a href="{{ url_for('relatorio_cobrancas', filtro_os=item_os.os, filtro_status=status_os_sem_cobranca_label) }}" 
                                class="btn btn-sm btn-outline-primary btn-action">
                                 <i class="fas fa-search"></i> Ver Detalhes
                             </a>
@@ -88,8 +98,8 @@
                 </ul>
             {% else %}
                 <div class="empty-state">
-                    <i class="fas fa-car empty-icon"></i>
-                    <p>Nenhuma placa encontrada para OS com status "{{ status_os_sem_cobranca_label }}".</p>
+                    <i class="fas fa-check-circle empty-icon text-success"></i>
+                    <p>Nenhuma OS encontrada com o status "{{ status_os_sem_cobranca_label }}".</p>
                 </div>
             {% endif %}
         </div>
@@ -99,7 +109,7 @@
 
 {% block head_extra %}
 {{ super() }}
-{# Reutilizar os estilos do dashboard.html original, pois a estrutura é similar #}
+{# Os estilos do dashboard já foram fornecidos anteriormente. Este bloco pode ser usado para ajustes finos, se necessário. #}
 <style>
     .dashboard-section { margin-bottom: 2.5rem; }
     .dashboard-section-title { font-size: 1.5rem; color: var(--text-color); margin-bottom: 1.5rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--accent-color-light); }
@@ -126,12 +136,13 @@
     .text-success { color: var(--flash-success-text-L) !important; }
     html[data-theme$="-dark"] .text-success { color: var(--flash-success-text-D) !important; }
     .scrollable-list { max-height: 350px; overflow-y: auto; padding-right: 0.5rem; }
-    .plates-list { list-style: none; padding: 0; margin: 0; }
+    .plates-list { list-style: none; padding: 0; margin: 0; } /* Reutilizado para a lista de OS */
     .plate-item { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 0.25rem; border-bottom: 1px solid var(--table-border-color); }
     .plate-item:last-child { border-bottom: none; }
     .plate-text { color: var(--text-color); font-weight: 500; }
     .plate-item .btn-action { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
     .empty-state { text-align: center; padding: 2rem; color: var(--text-muted-color); }
     .empty-icon { font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.6; }
+    .fa-xs { font-size: 0.70em; margin-left: 3px; opacity: 0.7; } /* Para o ícone de link externo */
 </style>
 {% endblock %}

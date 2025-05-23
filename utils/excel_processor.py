@@ -79,7 +79,6 @@ def categorizar_conformidade(conformidade_original):
 
 # --- Funções de Processamento de Excel/CSV (mantidas) ---
 def processar_excel_cobrancas(file_path, file_extension, db_name):
-    # ... (código mantido como na versão anterior - ID: excel_processor_py_completo_vfinal_revisado)
     logger.info(f"Processando cobranças: {file_path} para DB: {db_name}")
     conn = None
     try:
@@ -122,7 +121,6 @@ def processar_excel_cobrancas(file_path, file_extension, db_name):
     return False, "Erro desconhecido no processamento de cobranças."
 
 def processar_excel_pendentes(file_path, file_extension, db_name):
-    # ... (código mantido como na versão anterior - ID: excel_processor_py_completo_vfinal_revisado) ...
     logger.info(f"Processando pendências: {file_path} para DB: {db_name}")
     conn = None
     try:
@@ -170,9 +168,8 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
         if conn: conn.close()
     return False, "Erro desconhecido no processamento de pendências."
 
-# --- Funções de Leitura de Dados (mantidas) ---
+# --- Funções de Leitura de Dados ---
 def get_cobrancas(filtros=None, db_name='polis_database.db'):
-    # ... (código mantido como na versão anterior - ID: excel_processor_py_completo_vfinal_revisado) ...
     conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
     query = "SELECT id, pedido, os, filial, placa, transportadora, conformidade, status, strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt FROM cobrancas"
     conditions, params = [], []
@@ -191,7 +188,6 @@ def get_cobrancas(filtros=None, db_name='polis_database.db'):
         if conn: conn.close()
 
 def get_pendentes(filtros=None, db_name='polis_database.db'):
-    # ... (código mantido como na versão anterior - ID: excel_processor_py_completo_vfinal_revisado) ...
     conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
     query = "SELECT id, pedido_ref, fornecedor, filial, valor, status, strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt FROM pendentes"
     conditions, params = [], []
@@ -214,7 +210,6 @@ def get_pendentes(filtros=None, db_name='polis_database.db'):
         if conn: conn.close()
 
 def get_distinct_values(column_name, table_name, db_name='polis_database.db'):
-    # ... (código mantido como na versão anterior - ID: excel_processor_py_completo_vfinal_revisado) ...
     conn = sqlite3.connect(db_name); cursor = conn.cursor()
     try:
         query = f"SELECT DISTINCT TRIM({column_name}) FROM {table_name} WHERE {column_name} IS NOT NULL AND TRIM({column_name}) != '' ORDER BY TRIM({column_name}) ASC"
@@ -223,14 +218,13 @@ def get_distinct_values(column_name, table_name, db_name='polis_database.db'):
     finally:
         if conn: conn.close()
 
-# --- Funções para Dashboard (Existentes e Novas) ---
-# Funções para o Dashboard de Pedidos (mantidas e ajustadas para usar os valores padronizados)
+# --- Funções para Dashboard (Pedidos) ---
 def get_count_pedidos_status_especifico(status_desejado, db_name='polis_database.db'):
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
         query = "SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE LOWER(status) = LOWER(?)"
-        cursor.execute(query, (status_desejado.lower(),)); count = cursor.fetchone()[0] # Comparar com minúsculas
+        cursor.execute(query, (status_desejado.lower(),)); count = cursor.fetchone()[0]
         return count if count is not None else 0
     except sqlite3.Error as e: logger.error(f"Erro SQL contar pedidos status '{status_desejado}': {e}"); return 0
     finally:
@@ -270,57 +264,68 @@ def get_pedidos_status_por_filial(status_desejado, db_name='polis_database.db'):
     finally:
         if conn: conn.close()
 
-# --- NOVAS FUNÇÕES PARA DASHBOARD MANUTENÇÃO (FOCO EM OS) ---
+# --- Funções para Dashboard Manutenção (OS) ---
 def get_count_os_status_especifico(status_desejado, db_name='polis_database.db'):
-    """Conta OS distintas com um status específico na tabela de cobranças."""
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
         query = "SELECT COUNT(DISTINCT os) FROM cobrancas WHERE LOWER(status) = LOWER(?)"
         cursor.execute(query, (status_desejado.lower(),)); count = cursor.fetchone()[0]
         return count if count is not None else 0
-    except sqlite3.Error as e:
-        logger.error(f"Erro SQL ao contar OS com status '{status_desejado}': {e}")
-        return 0
+    except sqlite3.Error as e: logger.error(f"Erro SQL contar OS status '{status_desejado}': {e}"); return 0
     finally:
         if conn: conn.close()
 
 def get_count_total_os_lancadas(db_name='polis_database.db'):
-    """Conta o total de OS distintas lançadas na tabela de cobranças (status 'Com cobrança')."""
     return get_count_os_status_especifico("Com cobrança", db_name)
 
 def get_count_os_para_verificar(db_name='polis_database.db'):
-    """Conta OS distintas com conformidade 'Verificar'."""
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
         query = "SELECT COUNT(DISTINCT os) FROM cobrancas WHERE LOWER(TRIM(conformidade)) = LOWER(?)"
         cursor.execute(query, ('verificar',)); count = cursor.fetchone()[0]
         return count if count is not None else 0
-    except sqlite3.Error as e:
-        logger.error(f"Erro SQL ao contar OS para verificar: {e}")
-        return 0
+    except sqlite3.Error as e: logger.error(f"Erro SQL contar OS para verificar: {e}"); return 0
     finally:
         if conn: conn.close()
 
 def get_os_status_por_filial(status_desejado, db_name='polis_database.db'):
-    """Conta OS distintas com um status específico, agrupados por filial."""
     conn = None
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        query = """
-            SELECT filial, COUNT(DISTINCT os) as count_os
-            FROM cobrancas
-            WHERE LOWER(status) = LOWER(?) AND filial IS NOT NULL AND TRIM(filial) != ''
-            GROUP BY filial
-            ORDER BY count_os DESC, filial ASC
-        """
+        query = "SELECT filial, COUNT(DISTINCT os) as count_os FROM cobrancas WHERE LOWER(status) = LOWER(?) AND filial IS NOT NULL AND TRIM(filial) != '' GROUP BY filial ORDER BY count_os DESC, filial ASC"
         cursor.execute(query, (status_desejado.lower(),)); return cursor.fetchall()
-    except sqlite3.Error as e:
-        logger.error(f"Erro SQL ao buscar OS status '{status_desejado}' por filial: {e}")
-        return []
+    except sqlite3.Error as e: logger.error(f"Erro SQL OS status por filial '{status_desejado}': {e}"); return []
     finally:
         if conn: conn.close()
+
+def get_os_com_status_especifico(status_desejado, db_name='polis_database.db'): # NOVA FUNÇÃO
+    """Busca OS distintas com um status específico na tabela de cobranças."""
+    conn = None
+    try:
+        conn = sqlite3.connect(db_name)
+        conn.row_factory = sqlite3.Row # Para aceder por nome da coluna
+        cursor = conn.cursor()
+        # Seleciona OS distintas que não sejam vazias ou nulas
+        query = """
+            SELECT DISTINCT os 
+            FROM cobrancas 
+            WHERE LOWER(status) = LOWER(?) 
+              AND os IS NOT NULL 
+              AND TRIM(os) != '' 
+            ORDER BY os ASC
+        """
+        cursor.execute(query, (status_desejado.lower(),))
+        # Retorna uma lista de dicionários/Rows, cada um contendo uma 'os'
+        return cursor.fetchall() 
+    except sqlite3.Error as e:
+        logger.error(f"Erro SQL ao buscar OS com status '{status_desejado}': {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
 
 # --- CRUD para Cobranças (mantido) ---
 def get_cobranca_by_id(cobranca_id, db_name):
