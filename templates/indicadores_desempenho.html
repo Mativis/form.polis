@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Indicadores de Desempenho - Pólis{% endblock %}
+
+{% block content %}
+{# O botão Voltar será renderizado pelo base.html se pagina_anterior_url for passado pela rota #}
+
+<div class="page-header">
+    <h2 class="page-title"><i class="fas fa-chart-line"></i> Indicadores de Desempenho</h2>
+</div>
+
+<div class="dashboard-section">
+    <h3 class="dashboard-section-title">Visão Geral dos Indicadores Chave (KPIs)</h3>
+    <p class="text-muted mb-4">Acompanhe as métricas mais importantes para a gestão de cobranças e pendências.</p>
+
+    <div class="kpi-grid">
+        {# KPI 1 #}
+        <div class="kpi-card">
+            <div class="kpi-icon-container">
+                <i class="fas fa-percent fa-2x"></i>
+            </div>
+            <h4 class="kpi-title">Taxa de Cobranças Efetuadas</h4>
+            {# CORRIGIDO: Acesso via kpis.chave #}
+            <p class="kpi-value">{{ kpis.taxa_cobranca_efetuada | default('N/D') }}%</p>
+            <p class="kpi-description">Percentagem de pedidos com cobrança lançada sobre o total de pedidos registados.</p>
+        </div>
+
+        {# KPI 2 #}
+        <div class="kpi-card">
+            <div class="kpi-icon-container">
+                <i class="fas fa-exclamation-triangle fa-2x"></i>
+            </div>
+            <h4 class="kpi-title">Percentual de Não Conformidade</h4>
+            {# CORRIGIDO: Acesso via kpis.chave #}
+            <p class="kpi-value">{{ kpis.percentual_nao_conforme | default('N/D') }}%</p>
+            <p class="kpi-description">Percentagem de pedidos com conformidade "Verificar" sobre o total de pedidos registados.</p>
+        </div>
+
+        {# KPI 3 #}
+        <div class="kpi-card">
+            <div class="kpi-icon-container">
+                <i class="fas fa-hourglass-half fa-2x"></i>
+            </div>
+            <h4 class="kpi-title">Tempo Médio de Resolução (Pendentes)</h4>
+            {# CORRIGIDO: Acesso via kpis.chave #}
+            <p class="kpi-value">{{ kpis.tempo_medio_resolucao | default('N/D') }}</p> {# Removido 'dias' para manter flexível #}
+            <p class="kpi-description">Tempo médio para finalizar pendências (a ser implementado).</p>
+        </div>
+        
+        {# KPI 4 #}
+        <div class="kpi-card">
+            <div class="kpi-icon-container">
+                <i class="fas fa-dollar-sign fa-2x"></i>
+            </div>
+            <h4 class="kpi-title">Valor Total de Pendências Ativas</h4>
+            {# CORRIGIDO: Acesso via kpis.chave #}
+            <p class="kpi-value">{{ kpis.valor_total_pendencias | format_currency | default('N/D') }}</p>
+            <p class="kpi-description">Soma dos valores de todas as pendências com status "Pendente".</p>
+        </div>
+
+        {# Placeholder para mais KPIs #}
+        <div class="kpi-card placeholder">
+            <div class="kpi-icon-container">
+                <i class="fas fa-chart-pie fa-2x"></i>
+            </div>
+            <h4 class="kpi-title">Outro Indicador Importante</h4>
+            <p class="kpi-value">Em Breve</p>
+            <p class="kpi-description">Descrição do futuro indicador.</p>
+        </div>
+        <div class="kpi-card placeholder">
+            <div class="kpi-icon-container">
+                <i class="fas fa-cogs fa-2x"></i>
+            </div>
+            <h4 class="kpi-title">Métrica de Eficiência</h4>
+            <p class="kpi-value">Em Breve</p>
+            <p class="kpi-description">Detalhes sobre a métrica de eficiência operacional.</p>
+        </div>
+    </div>
+</div>
+
+{# Secção para Gráficos (Placeholder) #}
+<div class="dashboard-section">
+    <h3 class="dashboard-section-title">Visualizações Gráficas</h3>
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h4>Evolução de Cobranças vs Pendências</h4>
+                </div>
+                <div class="card-body text-center">
+                    <i class="fas fa-chart-area fa-4x text-muted my-3"></i>
+                    <p class="text-muted">Gráfico de evolução temporal será implementado aqui.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h4>Distribuição de Status</h4>
+                </div>
+                <div class="card-body text-center">
+                    <i class="fas fa-chart-pie fa-4x text-muted my-3"></i>
+                    <p class="text-muted">Gráfico de pizza/barras da distribuição de status será implementado aqui.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block head_extra %}
+{{ super() }}
+<style>
+    .dashboard-section { margin-bottom: 2.5rem; }
+    .dashboard-section-title { 
+        font-size: 1.5rem; 
+        color: var(--text-color); 
+        margin-bottom: 1.5rem; 
+        padding-bottom: 0.5rem; 
+        border-bottom: 2px solid var(--accent-color-light); 
+    }
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .kpi-card {
+        background-color: var(--card-bg);
+        border: 1px solid var(--card-border-color);
+        border-radius: var(--border-radius-base);
+        padding: 1.5rem;
+        text-align: center;
+        box-shadow: var(--box-shadow-sm);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+    }
+    .kpi-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--card-hover-box-shadow);
+    }
+    .kpi-card.placeholder { opacity: 0.7; border-style: dashed; }
+    .kpi-icon-container {
+        color: var(--accent-color);
+        margin-bottom: 1rem;
+        background-color: var(--accent-color-light);
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    html[data-theme="noite"] .kpi-icon-container {
+        background-color: var(--accent-color); 
+    }
+    html[data-theme="noite"] .kpi-icon-container i {
+        color: var(--card-bg); 
+    }
+    .kpi-icon-container .fas, .kpi-icon-container .fab { font-size: 1.8rem; }
+    .kpi-title { font-size: 1.1rem; color: var(--text-color); margin-bottom: 0.5rem; font-weight: 600; min-height: 2.2em; }
+    .kpi-value { font-size: 2rem; font-weight: 700; color: var(--accent-color); line-height: 1.1; margin-bottom: 0.5rem; }
+    html[data-theme="noite"] .kpi-value { color: var(--accent-color); }
+    .kpi-description { font-size: 0.85rem; color: var(--text-muted-color); margin-bottom: 1rem; flex-grow: 1; min-height: 3em; }
+    .kpi-link { font-size: 0.8rem; color: var(--link-color); text-decoration: none; font-weight: 500; margin-top: auto; }
+    .kpi-link:hover { color: var(--link-hover-color); text-decoration: underline; }
+    .row { display: flex; flex-wrap: wrap; margin-right: -15px; margin-left: -15px; }
+    .col-md-6 { position: relative; width: 100%; padding-right: 15px; padding-left: 15px; }
+    @media (min-width: 768px) { .col-md-6 { flex: 0 0 50%; max-width: 50%; } }
+    .my-3 { margin-top: 1rem !important; margin-bottom: 1rem !important; }
+</style>
+{% endblock %}

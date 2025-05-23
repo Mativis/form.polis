@@ -3,18 +3,20 @@
 {% block title %}Mundo de OS - Pólis{% endblock %}
 
 {% block content %}
-<div class="page-header text-center"> {# Adicionado text-center para centralizar o título da página #}
+{# O botão Voltar será renderizado pelo base.html se pagina_anterior_url for passado pela rota #}
+
+<div class="page-header text-center"> 
     <h2 class="page-title"><i class="fas fa-sitemap"></i> Mundo de OS - Escolha sua Análise</h2>
 </div>
 
-<div class="home-actions-grid" style="margin-top: 2rem;"> {# Reutilizando a classe da home para layout similar #}
+<div class="home-actions-grid" style="margin-top: 2rem;">
     <div class="action-card">
         <div class="action-card-icon">
             <i class="fas fa-file-alt fa-3x"></i> {# Ícone para Pedido #}
         </div>
         <h3 class="action-card-title">Análise por Pedido</h3>
         <p class="action-card-description">Visualize o dashboard e relatórios com foco nos dados consolidados por Pedido.</p>
-        <a href="{{ url_for('dashboard_pedidos') }}" class="btn btn-primary btn-lg action-card-button">
+        <a href="{{ url_for('dashboard_pedidos') }}" class="btn btn-primary action-card-button"> 
             <i class="fas fa-arrow-circle-right"></i> Dashboard de Pedidos
         </a>
     </div>
@@ -25,8 +27,23 @@
         </div>
         <h3 class="action-card-title">Análise por OS</h3>
         <p class="action-card-description">Aceda ao dashboard e informações com foco nos dados por Ordem de Serviço (Manutenção).</p>
-        <a href="{{ url_for('dashboard_manutencao') }}" class="btn btn-primary btn-lg action-card-button">
+        <a href="{{ url_for('dashboard_manutencao') }}" class="btn btn-primary action-card-button">
             <i class="fas fa-arrow-circle-right"></i> Dashboard de Manutenção
+        </a>
+    </div>
+
+    {# NOVO CARD PARA INDICADORES DE DESEMPENHO #}
+    <div class="action-card">
+        <div class="action-card-icon">
+            <i class="fas fa-chart-bar fa-3x"></i> {# Ícone para Indicadores #}
+        </div>
+        <h3 class="action-card-title">Indicadores de Desempenho</h3>
+        <p class="action-card-description">Acompanhe os principais indicadores e métricas de desempenho do sistema.</p>
+        {# ATENÇÃO: 'indicadores_desempenho' precisa ser uma rota válida no app.py #}
+        {# Por agora, vou deixar como placeholder, ou podemos apontar para um dashboard existente se fizer sentido #}
+        <a href="{{ url_for('indicadores_desempenho') }}" class="btn btn-primary action-card-button"> {# Temporariamente aponta para dashboard_pedidos #}
+        {# <a href="#" class="btn btn-primary action-card-button disabled" title="Em breve"> #}
+            <i class="fas fa-tachometer-alt"></i> Ver Indicadores
         </a>
     </div>
 </div>
@@ -34,25 +51,36 @@
 
 {% block head_extra %}
 {{ super() }}
-{# Reutilizar estilos da home.html para os cartões de ação #}
 <style>
     .page-header.text-center .page-title {
-        display: block; /* Para que o text-align do pai funcione */
-        border-bottom: none; /* Remover borda se não quiser no título centralizado */
+        display: block; 
+        border-bottom: none; 
         margin-bottom: 1rem;
     }
      .home-actions-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); 
+        /* Ajustado para tentar 3 colunas quando possível, senão 2 ou 1 */
+        grid-template-columns: repeat(auto-fit, minmax(min(100%/1, 300px), 1fr)); 
         gap: 2rem; 
         margin-bottom: 3rem;
-        margin-top: 1rem; /* Espaço após o título da página */
+        margin-top: 1rem; 
     }
+    @media (min-width: 700px) { /* A partir de 700px, tenta 2 colunas */
+        .home-actions-grid {
+            grid-template-columns: repeat(auto-fit, minmax(min(100%/2, 300px), 1fr));
+        }
+    }
+    @media (min-width: 1050px) { /* A partir de 1050px, tenta 3 colunas */
+        .home-actions-grid {
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+    }
+
     .action-card {
         background-color: var(--card-bg);
         border-radius: var(--border-radius-base);
         box-shadow: var(--card-box-shadow);
-        padding: 2rem 1.5rem; /* Ajustar padding */
+        padding: 2rem 1.5rem; 
         text-align: center;
         display: flex;
         flex-direction: column;
@@ -64,9 +92,36 @@
         box-shadow: var(--card-hover-box-shadow);
     }
     .action-card-icon { color: var(--accent-color); margin-bottom: 1.5rem; }
-    .action-card-icon .fas { font-size: 2.8rem; } /* Ajustar tamanho do ícone */
+    .action-card-icon .fas { font-size: 2.8rem; } 
     .action-card-title { font-size: 1.35rem; color: var(--text-color); margin-bottom: 0.75rem; font-weight: 600; }
-    .action-card-description { font-size: 0.9rem; color: var(--text-muted-color); margin-bottom: 1.5rem; flex-grow: 1; }
-    .action-card-button.btn-lg { padding: 0.65rem 1.25rem; font-size: 0.95rem; width: 90%; max-width: 280px; }
+    .action-card-description { 
+        font-size: 0.9rem; 
+        color: var(--text-muted-color); 
+        margin-bottom: 1.5rem; 
+        flex-grow: 1; 
+        min-height: 3.8em; /* Para ajudar a alinhar cartões com descrições de tamanhos diferentes */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .action-card-button { 
+        padding: 0.65rem 1.25rem; 
+        font-size: 0.95rem; 
+        width: 90%; 
+        max-width: 280px; 
+        margin-top: auto; /* Garante que o botão fique em baixo */
+    }
+    .action-card-button.disabled {
+        background-color: var(--btn-secondary-bg);
+        border-color: var(--btn-secondary-border);
+        color: var(--text-muted-color);
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+    html[data-theme="noite"] .action-card-button.disabled {
+        background-color: var(--btn-secondary-bg-D);
+        border-color: var(--btn-secondary-border-D);
+        color: var(--text-muted-color);
+    }
 </style>
 {% endblock %}
