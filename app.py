@@ -6,7 +6,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta # Adicionado timedelta
 import logging
 import pytz
 import re
@@ -350,15 +350,16 @@ def indicadores_desempenho():
         kpis_data['taxa_cobranca_efetuada'] = get_kpi_taxa_cobranca_efetuada(db_path, data_de_filtro, data_ate_filtro)
         kpis_data['percentual_nao_conforme'] = get_kpi_percentual_nao_conforme(db_path, data_de_filtro, data_ate_filtro)
         kpis_data['valor_total_pendencias'] = get_kpi_valor_total_pendencias_ativas(db_path, data_de_filtro, data_ate_filtro)
+        # kpis_data['tempo_medio_resolucao'] = get_kpi_tempo_medio_resolucao_pendencias(db_path, data_de_filtro, data_ate_filtro) # Implementar esta função
         
         evolucao_dados = get_evolucao_mensal_cobrancas_pendencias(db_path, data_de_filtro, data_ate_filtro)
-        if evolucao_dados: # Verifica se evolucao_dados não é None
-            chart_data['evolucao_meses'] = evolucao_dados.get('labels', []) # Usa .get() para segurança
+        if evolucao_dados: 
+            chart_data['evolucao_meses'] = evolucao_dados.get('labels', []) 
             chart_data['evolucao_cobrancas'] = evolucao_dados.get('cobrancas_data', [])
             chart_data['evolucao_pendencias'] = evolucao_dados.get('pendencias_data', [])
 
         dist_status_dados = get_distribuicao_status_cobranca(db_path, data_de_filtro, data_ate_filtro)
-        if dist_status_dados: # Verifica se dist_status_dados não é None
+        if dist_status_dados: 
             chart_data['distribuicao_status_labels'] = [item['status'] for item in dist_status_dados]
             chart_data['distribuicao_status_valores'] = [item['total'] for item in dist_status_dados]
     except Exception as e:
@@ -385,7 +386,6 @@ def edit_cobranca(cobranca_id):
         form_data_repopulate = {k: request.form.get(k, '').strip() for k in cobranca.keys() if k != 'id'}
         form_data_repopulate['conformidade'] = form_data_repopulate.get('conformidade','').strip()
         form_data_repopulate['status'] = form_data_repopulate.get('status','').strip()
-        # Adicionar data_emissao_pedido ao form_data_repopulate se for editável
         form_data_repopulate['data_emissao_pedido'] = request.form.get('data_emissao_pedido', cobranca['data_emissao_pedido'] if cobranca['data_emissao_pedido'] else '').strip()
 
         if not form_data_repopulate['pedido'] or not form_data_repopulate['os']: flash("Pedido e OS são campos obrigatórios.", "error")
@@ -407,6 +407,7 @@ def delete_cobranca_route(cobranca_id):
         else: log_audit("DELETE_COBRANCA_FAILURE", f"Falha ao apagar ID {cobranca_id}."); flash("Erro ao apagar.", "error")
     return redirect(url_for('relatorio_cobrancas'))
 
+# --- CRUD para Pendências ---
 @app.route('/pendencia/<int:pendencia_id>/edit', methods=['GET', 'POST'])
 @login_required 
 def edit_pendencia(pendencia_id):
@@ -414,7 +415,7 @@ def edit_pendencia(pendencia_id):
     if not pendencia: log_audit("EDIT_PENDENCIA_NOT_FOUND", f"ID {pendencia_id} não encontrado."); flash("Pendência não encontrada.", "error"); return redirect(url_for('relatorio_pendentes'))
     form_data_repopulate = dict(pendencia); 
     form_data_repopulate['valor'] = str(form_data_repopulate.get('valor', '')).replace('.', ',') 
-    if form_data_repopulate.get('data_emissao'): # Formatar para input type="date"
+    if form_data_repopulate.get('data_emissao'):
         try:
             dt = datetime.strptime(form_data_repopulate['data_emissao'].split(' ')[0], '%Y-%m-%d')
             form_data_repopulate['data_emissao_fmt_input'] = dt.strftime('%Y-%m-%d')
@@ -423,7 +424,7 @@ def edit_pendencia(pendencia_id):
 
     if request.method == 'POST':
         form_data_repopulate = {k: request.form.get(k, '').strip() for k in pendencia.keys() if k != 'id'}
-        form_data_repopulate['data_emissao'] = request.form.get('data_emissao_input', '').strip() # Pegar do input date
+        form_data_repopulate['data_emissao'] = request.form.get('data_emissao_input', '').strip() 
         
         if not form_data_repopulate['pedido_ref']: flash("Pedido de Referência é obrigatório.", "error")
         else:
@@ -435,11 +436,10 @@ def edit_pendencia(pendencia_id):
                     log_audit("EDIT_PENDENCIA_SUCCESS", f"Pendência ID {pendencia_id} atualizada."); flash("Pendência atualizada!", "success"); return redirect(url_for('relatorio_pendentes'))
                 else: log_audit("EDIT_PENDENCIA_FAILURE", f"Falha ao atualizar ID {pendencia_id}."); flash("Erro ao atualizar pendência.", "error")
             except ValueError: flash("Valor da pendência inválido.", "error")
-        form_data_repopulate['data_emissao_fmt_input'] = form_data_repopulate.get('data_emissao', '') # Repopular para o input date
+        form_data_repopulate['data_emissao_fmt_input'] = form_data_repopulate.get('data_emissao', '')
         return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id, pagina_anterior_url=url_for('relatorio_pendentes'), pagina_anterior_texto="Relatório de Pendências")
     
     return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id, pagina_anterior_url=url_for('relatorio_pendentes'), pagina_anterior_texto="Relatório de Pendências")
-
 @app.route('/pendencia/<int:pendencia_id>/delete', methods=['POST'])
 @login_required 
 def delete_pendencia_route(pendencia_id):
@@ -474,6 +474,7 @@ def relatorio_pendentes():
         return render_template('relatorio_pendentes.html', pendentes=pendentes, filtros=filtros_form, distinct_status_pend=distinct_status_pend, distinct_fornecedores_pend=distinct_fornecedores_pend, distinct_filiais_pend=distinct_filiais_pend, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
     except Exception as e: logger.error(f"Erro relatório pendências: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_pendentes.html', pendentes=[], filtros=filtros_form, distinct_status_pend=[], distinct_fornecedores_pend=[], distinct_filiais_pend=[], pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
 
+# --- Rota de Visualização do Log de Auditoria (Admin) ---
 @app.route('/admin/audit_log')
 @admin_required
 def view_audit_log():
@@ -506,6 +507,7 @@ def view_audit_log():
     except Exception as e: logger.error(f"Erro ao buscar logs: {e}"); flash("Erro ao buscar logs.", "error")
     return render_template('admin/view_audit_log.html', logs=logs_processed, current_page=page, total_pages=total_pages, filters=filters_form, total_logs=total_logs, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
 
+# --- ROTA DE IMPRESSÃO PARA VISUALIZAÇÃO HTML (mantida) ---
 @app.route('/relatorio-pendentes/imprimir_visualizacao')
 @login_required
 def imprimir_visualizacao_pendentes():
@@ -526,6 +528,7 @@ def imprimir_visualizacao_pendentes():
         flash("Erro ao gerar visualização para impressão. Verifique os logs.","error")
         return redirect(url_for('relatorio_pendentes',**filtros_form))
 
+# --- ROTA PARA EXPORTAR COBRANÇAS PARA EXCEL (mantida) ---
 @app.route('/relatorio-cobrancas/exportar_excel')
 @login_required
 def exportar_excel_cobrancas():

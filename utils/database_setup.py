@@ -29,44 +29,36 @@ def create_tables():
     except Exception as e:
         print(f"Erro ao criar/verificar tabela 'users': {e}"); conn.close(); return
 
-    # Tabela de Cobranças (COM NOVA COLUNA)
+    # Tabela de Cobranças
     try:
-        # Para evitar erro se a coluna já existir de uma execução anterior,
-        # podemos tentar adicionar a coluna apenas se ela não existir.
-        # No entanto, para um setup inicial, recriar ou garantir a estrutura é mais simples.
-        # Se preferir uma abordagem de migração, precisaria de verificar a existência da coluna.
-        # Por agora, vamos assumir que esta é a estrutura desejada.
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS cobrancas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                pedido TEXT,
-                os TEXT,
-                filial TEXT,
-                placa TEXT,
-                transportadora TEXT,
-                conformidade TEXT,
-                status TEXT,
+                pedido TEXT, os TEXT, filial TEXT, placa TEXT,
+                transportadora TEXT, conformidade TEXT, status TEXT,
                 data_importacao DATETIME DEFAULT CURRENT_TIMESTAMP,
                 data_emissao_pedido TEXT, 
                 UNIQUE(pedido, os)
             )
         ''')
-        # Tentar adicionar a coluna se a tabela já existir e a coluna não
         try:
             cursor.execute("ALTER TABLE cobrancas ADD COLUMN data_emissao_pedido TEXT")
             print("Coluna 'data_emissao_pedido' adicionada à tabela 'cobrancas'.")
         except sqlite3.OperationalError as e:
             if "duplicate column name" in str(e).lower():
                 print("Coluna 'data_emissao_pedido' já existe na tabela 'cobrancas'.")
-            else:
-                print(f"Erro operacional ao tentar adicionar coluna 'data_emissao_pedido': {e}")
+            else: print(f"Erro operacional ao tentar adicionar coluna 'data_emissao_pedido': {e}")
         print("Tabela 'cobrancas' verificada/atualizada com sucesso.")
     except Exception as e:
         print(f"Erro ao criar/verificar tabela 'cobrancas': {e}"); conn.close(); return
 
-    # Tabela de Pendências 
+    # Tabela de Pendências (COM NOVA COLUNA data_finalizacao_real)
     try:
-        print("Tentando recriar a tabela 'pendentes'...") # Mantém a recriação como antes
+        # Para garantir que a nova coluna seja adicionada se a tabela já existir,
+        # podemos tentar adicioná-la e ignorar o erro se ela já existir.
+        # No entanto, como a lógica anterior era de recriar, vamos manter isso por enquanto
+        # e adicionar a nova coluna na criação.
+        print("Tentando recriar a tabela 'pendentes' com a nova estrutura...")
         cursor.execute("DROP TABLE IF EXISTS pendentes;")
         print("Tabela 'pendentes' antiga (se existia) foi EXCLUÍDA para recriação.")
         
@@ -77,12 +69,13 @@ def create_tables():
                 fornecedor TEXT,
                 filial TEXT,
                 valor REAL,           
-                status TEXT,
-                data_emissao TEXT,    -- NOVA COLUNA PARA DATA DE EMISSÃO DA PLANILHA PENDENTES
+                status TEXT,          
+                data_emissao TEXT,    
+                data_finalizacao_real TEXT, -- NOVA COLUNA PARA DATA DE FINALIZAÇÃO REAL
                 data_importacao DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        print("Tabela 'pendentes' RECRIADA com sucesso com a nova estrutura (incluindo data_emissao).")
+        print("Tabela 'pendentes' RECRIADA com sucesso com a nova estrutura (incluindo data_emissao e data_finalizacao_real).")
     except Exception as e:
         print(f"Erro crítico ao recriar tabela 'pendentes': {e}"); conn.close(); return
 
@@ -102,10 +95,9 @@ def create_tables():
         print(f"Erro ao criar/verificar tabela 'audit_log': {e}"); conn.close(); return
 
     # Usuários padrão (Mantidos)
-    Senha_adminastro = input ('Senha desejada cadastrar: (Mativi) ')
-    
+    senhaadm = input ('Adicione a senha de administador: (Mativi)')
     try:
-        users_to_add = [('Mativi', '{Senha_adminastro}')]
+        users_to_add = [('Mativi', '{senhaadm}')]
         for uname, pwd in users_to_add:
             cursor.execute("SELECT id FROM users WHERE username = ?", (uname,))
             if not cursor.fetchone():
@@ -123,7 +115,7 @@ def create_tables():
 
 if __name__ == '__main__':
     print("Iniciando script de setup do banco de dados...")
-    print("Este script irá RECRIAR a tabela 'pendentes' e tentar ADICIONAR a coluna 'data_emissao_pedido' à tabela 'cobrancas'.")
+    print("Este script irá RECRIAR a tabela 'pendentes' e tentar ADICIONAR colunas às tabelas existentes.")
     confirm = input("Deseja continuar? (s/N): ").strip().lower()
     if confirm == 's':
         create_tables()

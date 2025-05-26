@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- Funções de Normalização e Auxiliares (mantidas) ---
+# --- Funções de Normalização e Auxiliares ---
 def normalize_column_name_generic(col_name, prefix="col_desconhecida"):
     if pd.isna(col_name) or col_name is None:
         return f"{prefix}_{str(abs(hash(str(datetime.now()))))}"
@@ -72,9 +72,8 @@ def format_date_for_db(date_string_or_dt):
     if dt_obj:
         sao_paulo_tz = pytz.timezone('America/Sao_Paulo')
         if dt_obj.tzinfo is None or dt_obj.tzinfo.utcoffset(dt_obj) is None: dt_obj = sao_paulo_tz.localize(dt_obj)
-        return dt_obj.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S') # Armazena como UTC
+        return dt_obj.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
     return None
-
 
 def format_date_for_query(date_string_or_dt): 
     formatted_date = format_date_for_db(date_string_or_dt) 
@@ -107,6 +106,7 @@ def categorizar_conformidade(conformidade_original):
     return "Verificar"
 
 def processar_excel_cobrancas(file_path, file_extension, db_name):
+    # ... (código mantido como na versão anterior - ID: excel_processor_py_data_emissao_cruzamento) ...
     logger.info(f"Processando cobranças: {file_path} para DB: {db_name}")
     conn = None
     try:
@@ -173,40 +173,64 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
         df_pendentes.columns = [normalize_column_name_generic(col, "pend") for col in df_pendentes.columns]
         conceptual_map = {'pedido_ref': ['id', 'pedido', 'pedido_id', 'codigo_pedido', 'pedido_ref'], 'valor': ['valor', 'montante', 'total', 'custo_pendencia', 'valor_total', 'valor pedido'],
                           'fornecedor': ['fornecedor', 'forncedor', 'vendor'], 'filial': ['filial', 'loja', 'unidade'], 'status': ['status', 'situacao', 'estado_pendencia'], 
-                          'data_finalizacao': ['data de finalizacao', 'data_finalizacao', 'data_conclusao', 'finalizacao_data', 'dt_finalizacao', 'data finalizacao'],
-                          'data_emissao': ['data_de_emissao', 'data_emissao', 'dt_emissao', 'data_criacao']}
+                          'data_finalizacao': ['data de finalizacao', 'data_finalizacao', 'data_conclusao', 'finalizacao_data', 'dt_finalizacao', 'data finalizacao'], # Usado para determinar status
+                          'data_emissao': ['data_de_emissao', 'data_emissao', 'dt_emissao', 'data_criacao', 'data_de_criacao']}
+        
         mapped_df = pd.DataFrame(); missing_mandatory = []
         col_pedido_ref = get_col_name_from_df(df_pendentes.columns, conceptual_map['pedido_ref'])
         col_valor = get_col_name_from_df(df_pendentes.columns, conceptual_map['valor'])
         col_data_emissao = get_col_name_from_df(df_pendentes.columns, conceptual_map['data_emissao'])
+        col_data_finalizacao_real = get_col_name_from_df(df_pendentes.columns, conceptual_map['data_finalizacao']) 
+
         if not col_pedido_ref: missing_mandatory.append("'Pedido Ref.' (ID)")
         if not col_valor: missing_mandatory.append("'Valor'")
-        if not col_data_emissao: logger.warning("Coluna 'Data de Emissão' não encontrada em Pendentes.")
+        if not col_data_emissao: logger.warning("Coluna para 'Data de Emissão' (ex: data_emissao) não encontrada na planilha de Pendentes. Será guardada como Nula.")
+        if not col_data_finalizacao_real: logger.warning("Coluna para 'Data de Finalização' (ex: data_finalizacao) não encontrada na planilha de Pendentes. Será guardada como Nula.")
+
         if missing_mandatory: msg = f"Colunas obrigatórias faltando em Pendências: {', '.join(missing_mandatory)}. Disponíveis: {original_columns}."; logger.error(msg); return False, msg
+        
         mapped_df['pedido_ref'] = df_pendentes[col_pedido_ref]; mapped_df['valor'] = df_pendentes[col_valor]
-        if col_data_emissao: mapped_df['data_emissao'] = df_pendentes[col_data_emissao]
-        else: mapped_df['data_emissao'] = None
-        for concept_key in ['fornecedor', 'filial', 'status', 'data_finalizacao']:
+        if col_data_emissao: mapped_df['data_emissao_original'] = df_pendentes[col_data_emissao]
+        else: mapped_df['data_emissao_original'] = None
+        if col_data_finalizacao_real: mapped_df['data_finalizacao_original'] = df_pendentes[col_data_finalizacao_real]
+        else: mapped_df['data_finalizacao_original'] = None
+        
+        for concept_key in ['fornecedor', 'filial', 'status']:
             found_col = get_col_name_from_df(df_pendentes.columns, conceptual_map[concept_key])
             mapped_df[concept_key] = df_pendentes[found_col] if found_col else pd.Series([None]*len(df_pendentes), dtype=str)
+        
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
         logger.warning("Limpando tabela 'pendentes'."); cursor.execute("DELETE FROM pendentes")
         adicionados, ignorados, atualizacoes_cobrancas = 0,0,0
-        for _, row in mapped_df.iterrows():
+        
+        for index, row in mapped_df.iterrows():
             pedido_ref = str(row.get('pedido_ref','')).strip(); valor_s = str(row.get('valor','')).strip()
-            data_emissao_original = row.get('data_emissao'); data_emissao_formatada_db = format_date_for_db(data_emissao_original) if data_emissao_original else None
+            data_emissao_str = str(row.get('data_emissao_original', '')).strip()
+            data_finalizacao_real_str = str(row.get('data_finalizacao_original', '')).strip()
+
+            data_emissao_db = format_date_for_db(data_emissao_str) if data_emissao_str else None
+            data_finalizacao_real_db = format_date_for_db(data_finalizacao_real_str) if data_finalizacao_real_str else None
+
             if not pedido_ref or not valor_s: ignorados+=1; continue
             try: val_f = float(valor_s.replace('R$','').strip().replace('.','').replace(',','.'))
             except ValueError: ignorados+=1; continue
+            
             status_orig = str(row.get('status','Pendente')).strip() or 'Pendente'
-            status_final = "Finalizado" if is_valid_date_string(str(row.get('data_finalizacao',''))) else status_orig
-            dados_pendente = (pedido_ref, str(row.get('fornecedor','N/A')).strip() or 'N/A', str(row.get('filial','N/A')).strip() or 'N/A', 
-                              val_f, status_final, data_emissao_formatada_db, datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S'))
+            status_final = "Finalizado" if data_finalizacao_real_db else status_orig 
+            if normalize_column_name_generic(status_orig) in ["nao_finalizado", "nao finalizado", "em_aberto", "aberto"] and not data_finalizacao_real_db:
+                status_final = "Pendente"
+
+            dados_pendente = (pedido_ref, str(row.get('fornecedor','N/A')).strip() or 'N/A', 
+                              str(row.get('filial','N/A')).strip() or 'N/A', 
+                              val_f, status_final, 
+                              data_emissao_db, 
+                              data_finalizacao_real_db, 
+                              datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S'))
             try: 
-                cursor.execute("INSERT INTO pendentes (pedido_ref, fornecedor, filial, valor, status, data_emissao, data_importacao) VALUES (?,?,?,?,?,?,?)", dados_pendente); adicionados += 1
-                if data_emissao_formatada_db and pedido_ref:
+                cursor.execute("INSERT INTO pendentes (pedido_ref, fornecedor, filial, valor, status, data_emissao, data_finalizacao_real, data_importacao) VALUES (?,?,?,?,?,?,?,?)", dados_pendente); adicionados += 1
+                if data_emissao_db and pedido_ref:
                     try:
-                        res_update = cursor.execute("UPDATE cobrancas SET data_emissao_pedido = ? WHERE pedido = ? AND (data_emissao_pedido IS NULL OR data_emissao_pedido = '')", (data_emissao_formatada_db, pedido_ref))
+                        res_update = cursor.execute("UPDATE cobrancas SET data_emissao_pedido = ? WHERE pedido = ? AND (data_emissao_pedido IS NULL OR data_emissao_pedido = '')", (data_emissao_db, pedido_ref))
                         if res_update.rowcount > 0: atualizacoes_cobrancas += res_update.rowcount
                     except sqlite3.Error as e_up_cob: logger.error(f"Erro update data_emissao_pedido P:{pedido_ref}: {e_up_cob}")
             except sqlite3.Error as e: logger.error(f"SQL Erro Pendência (Ref:{pedido_ref}): {e}"); ignorados+=1
@@ -228,7 +252,7 @@ def get_cobrancas(filtros=None, db_name='polis_database.db'):
                 if key in ['pedido', 'os', 'placa', 'filial', 'transportadora']: conditions.append(f"LOWER({key}) LIKE LOWER(?)"); params.append(f"%{val}%")
                 elif key in ['status', 'conformidade']: conditions.append(f"LOWER({key}) = LOWER(?)"); params.append(val)
                 elif key == 'data_emissao_de':
-                    dt_db = format_date_for_query(val) # Usa a nova função para obter YYYY-MM-DD
+                    dt_db = format_date_for_query(val)
                     if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao_pedido) >= ?"); params.append(dt_db)
                 elif key == 'data_emissao_ate':
                     dt_db = format_date_for_query(val)
@@ -242,7 +266,7 @@ def get_cobrancas(filtros=None, db_name='polis_database.db'):
 
 def get_pendentes(filtros=None, db_name='polis_database.db'):
     conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-    query = "SELECT id, pedido_ref, fornecedor, filial, valor, status, data_emissao, strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt FROM pendentes"
+    query = "SELECT id, pedido_ref, fornecedor, filial, valor, status, data_emissao, data_finalizacao_real, strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt, strftime('%d/%m/%Y', data_emissao) as data_emissao_fmt, strftime('%d/%m/%Y', data_finalizacao_real) as data_finalizacao_real_fmt FROM pendentes"
     conditions, params = [], []
     if filtros:
         if filtros.get('pedido_ref'): conditions.append("LOWER(pedido_ref) LIKE LOWER(?)"); params.append(f"%{filtros['pedido_ref']}%")
@@ -275,13 +299,14 @@ def _build_date_filter_sql(date_column, data_de, data_ate):
     conditions = []
     params = []
     if data_de:
-        dt_de_str = format_date_for_query(data_de) # Converte para YYYY-MM-DD
+        dt_de_str = format_date_for_query(data_de) 
         if dt_de_str: conditions.append(f"STRFTIME('%Y-%m-%d', {date_column}) >= ?"); params.append(dt_de_str)
     if data_ate:
         dt_ate_str = format_date_for_query(data_ate)
         if dt_ate_str: conditions.append(f"STRFTIME('%Y-%m-%d', {date_column}) <= ?"); params.append(dt_ate_str)
     return " AND ".join(conditions), params
 
+# --- Funções para Dashboard e KPIs com Filtro de Data ---
 def get_count_pedidos_status_especifico(status_desejado, db_name, data_de=None, data_ate=None):
     conn = None; date_filter_sql, date_params = "", []
     if data_de or data_ate:
@@ -409,8 +434,14 @@ def get_kpi_taxa_cobranca_efetuada(db_name, data_de=None, data_ate=None):
         if total_pedidos_registados == 0: return 0.0
         
         status_com_cobranca = "Com cobrança"
-        query_com_cobranca = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE LOWER(status) = LOWER(?) {date_filter_sql.replace('WHERE','AND') if date_filter_sql else ''}"
-        final_params = (status_com_cobranca.lower(), *params)
+        query_com_cobranca_where_clause = f"LOWER(status) = LOWER(?)"
+        if date_filter_sql:
+            query_com_cobranca = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {date_filter_sql} AND {query_com_cobranca_where_clause}"
+            final_params = (*params, status_com_cobranca.lower())
+        else:
+            query_com_cobranca = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE {query_com_cobranca_where_clause}"
+            final_params = (status_com_cobranca.lower(),)
+            
         cursor.execute(query_com_cobranca, final_params); 
         pedidos_com_cobranca = cursor.fetchone()[0] or 0
 
@@ -433,8 +464,14 @@ def get_kpi_percentual_nao_conforme(db_name, data_de=None, data_ate=None):
         if total_pedidos_registados == 0: return 0.0
         
         conformidade_verificar = "Verificar"
-        query_nao_conforme = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE LOWER(TRIM(conformidade)) = LOWER(?) {date_filter_sql.replace('WHERE','AND') if date_filter_sql else ''}"
-        final_params = (conformidade_verificar.lower(), *params)
+        query_nao_conforme_where_clause = f"LOWER(TRIM(conformidade)) = LOWER(?)"
+        if date_filter_sql:
+            query_nao_conforme = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {date_filter_sql} AND {query_nao_conforme_where_clause}"
+            final_params = (*params, conformidade_verificar.lower())
+        else:
+            query_nao_conforme = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE {query_nao_conforme_where_clause}"
+            final_params = (conformidade_verificar.lower(),)
+
         cursor.execute(query_nao_conforme, final_params);
         pedidos_nao_conforme = cursor.fetchone()[0] or 0
         
@@ -459,11 +496,39 @@ def get_kpi_valor_total_pendencias_ativas(db_name, data_de=None, data_ate=None):
     finally:
         if conn: conn.close()
 
+def get_kpi_tempo_medio_resolucao_pendencias(db_name, data_de=None, data_ate=None):
+    """Calcula o tempo médio de resolução de pendências finalizadas no período."""
+    conn = None
+    date_filter_sql, params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, params = _build_date_filter_sql("data_finalizacao_real", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+    try:
+        conn = sqlite3.connect(db_name)
+        cursor = conn.cursor()
+        query = f"""
+            SELECT AVG(JULIANDAY(data_finalizacao_real) - JULIANDAY(data_emissao)) as tempo_medio_dias
+            FROM pendentes
+            WHERE LOWER(TRIM(status)) = LOWER('finalizado') 
+              AND data_emissao IS NOT NULL AND data_emissao != ''
+              AND data_finalizacao_real IS NOT NULL AND data_finalizacao_real != ''
+              {date_filter_sql}
+        """
+        cursor.execute(query, tuple(params))
+        resultado = cursor.fetchone()
+        if resultado and resultado[0] is not None:
+            return round(resultado[0], 1) 
+        else:
+            return "N/D" 
+    except sqlite3.Error as e: logger.error(f"Erro SQL KPI tempo médio de resolução: {e}"); return "N/D"
+    except Exception as e_gen: logger.error(f"Erro geral KPI tempo médio: {e_gen}", exc_info=True); return "N/D"
+    finally:
+        if conn: conn.close()
+
 def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=None, num_months=6):
     conn = None
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        
         data_de_query, data_ate_query = data_de, data_ate
         if not data_de_query and not data_ate_query:
             end_date_obj = datetime.now()
@@ -490,10 +555,9 @@ def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=Non
 
         meses_no_intervalo = pd.date_range(start=start_dt, end=end_dt, freq='MS').strftime('%Y-%m').tolist()
         labels_grafico = pd.date_range(start=start_dt, end=end_dt, freq='MS').strftime('%b/%y').tolist()
-        if not meses_no_intervalo and (data_de_query or data_ate_query): # Se o intervalo for muito pequeno e não gerar meses
+        if not meses_no_intervalo and (data_de_query or data_ate_query): 
              labels_grafico = [start_dt.strftime('%b/%y')] if start_dt == end_dt else [start_dt.strftime('%b/%y'), end_dt.strftime('%b/%y')]
              meses_no_intervalo = [start_dt.strftime('%Y-%m')] if start_dt == end_dt else [start_dt.strftime('%Y-%m'), end_dt.strftime('%Y-%m')]
-
 
         dados_cobrancas_grafico = [cobrancas_raw.get(mes, 0) for mes in meses_no_intervalo]
         dados_pendencias_grafico = [pendentes_raw.get(mes, 0) for mes in meses_no_intervalo]
@@ -540,11 +604,11 @@ def update_cobranca_db(cobranca_id, data, db_name):
             cursor.execute("SELECT id FROM cobrancas WHERE pedido = ? AND os = ? AND id != ?", (data['pedido'], data['os'], cobranca_id))
             if cursor.fetchone(): logger.warning(f"Update cobrança ID {cobranca_id} para Pedido/OS já existente."); return False 
         data_emissao_pedido_val = data.get('data_emissao_pedido')
-        if data_emissao_pedido_val and isinstance(data_emissao_pedido_val, str) and data_emissao_pedido_val.strip(): # Verifica se não é string vazia
+        if data_emissao_pedido_val and isinstance(data_emissao_pedido_val, str) and data_emissao_pedido_val.strip(): 
             data_emissao_pedido_val = format_date_for_db(data_emissao_pedido_val)
-        elif not data_emissao_pedido_val: # Se for None ou string vazia, define como None
+        elif not data_emissao_pedido_val: 
              data_emissao_pedido_val = None
-        else: # Se já for um formato de data do banco, mantém
+        else: 
             existing_cobranca = get_cobranca_by_id(cobranca_id, db_name)
             data_emissao_pedido_val = existing_cobranca['data_emissao_pedido'] if existing_cobranca else None
 
@@ -586,9 +650,18 @@ def update_pendencia_db(pendencia_id, data, db_name):
                 if valor_str.rfind('.') < valor_str.rfind(','): valor_str = valor_str.replace('.', '')
             valor_str = valor_str.replace(',', '.'); valor_float = float(valor_str)
         except ValueError: logger.error(f"Valor inválido '{data.get('valor')}' update pendência ID {pendencia_id}."); return False
+        
         data_emissao_formatada_db = format_date_for_db(data.get('data_emissao')) if data.get('data_emissao') else None
-        cursor.execute("UPDATE pendentes SET pedido_ref = ?, fornecedor = ?, filial = ?, valor = ?, status = ?, data_emissao = ?, data_importacao = ? WHERE id = ?",
-                       (data.get('pedido_ref'), data.get('fornecedor'), data.get('filial'), valor_float, data.get('status'), data_emissao_formatada_db, data_atualizacao_utc, pendencia_id))
+        data_finalizacao_real_db = format_date_for_db(data.get('data_finalizacao_real')) if data.get('data_finalizacao_real') else None
+
+
+        cursor.execute("""
+            UPDATE pendentes SET pedido_ref = ?, fornecedor = ?, filial = ?, valor = ?, status = ?,
+            data_emissao = ?, data_finalizacao_real = ?, data_importacao = ? 
+            WHERE id = ?
+        """, (data.get('pedido_ref'), data.get('fornecedor'), data.get('filial'), valor_float, 
+              data.get('status'), data_emissao_formatada_db, data_finalizacao_real_db,
+              data_atualizacao_utc, pendencia_id))
         conn.commit(); return True if cursor.rowcount > 0 else False
     except sqlite3.Error as e: logger.error(f"Erro SQL update pendência ID {pendencia_id}: {e}"); conn.rollback(); return False
     finally:
@@ -603,3 +676,4 @@ def delete_pendencia_db(pendencia_id, db_name):
     except sqlite3.Error as e: logger.error(f"Erro SQL apagar pendência ID {pendencia_id}: {e}"); conn.rollback(); return False
     finally:
         if conn: conn.close()
+
