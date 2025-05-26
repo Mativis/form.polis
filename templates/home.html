@@ -3,187 +3,50 @@
 {% block title %}Bem-vindo ao Pólis{% endblock %}
 
 {% block content %}
-<div class="page-header text-center">
-    <h2 class="page-title">Bem-vindo ao Sistema Pólis</h2>
-    <p class="home-hero-subtitle" style="font-size: 1.1rem; color: var(--text-muted-color);">Selecione uma das opções abaixo para começar ou gerir o sistema.</p>
+<div class="page-header text-center" style="margin-top: 3rem; margin-bottom: 2rem;">
+    <img src="{{ url_for('static', filename='images/polis_logo.png') }}" alt="Logótipo Pólis" class="app-logo-img" style="height: 80px; margin-bottom: 1rem;">
+    <h2 class="page-title" style="border-bottom: none; font-size: 2.5rem;">Bem-vindo ao Sistema Pólis</h2>
+    <p class="home-hero-subtitle" style="font-size: 1.2rem; color: var(--text-muted-color); max-width: 600px; margin: 0 auto;">
+        O seu centro de gestão e análise de dados de cobranças e pendências.
+    </p>
+    <p style="font-size: 1rem; color: var(--text-muted-color); margin-top: 1rem;">
+        Utilize o menu de navegação superior para aceder às funcionalidades do sistema.
+    </p>
 </div>
 
-<div class="home-actions-grid" style="margin-top: 1rem;">
-    {# Card: Mundo de OS & Dashboards #}
-    <div class="action-card">
-        <div class="action-card-icon">
-            <i class="fas fa-sitemap fa-3x"></i>
-        </div>
-        <h3 class="action-card-title">Mundo de OS & Dashboards</h3>
-        <p class="action-card-description">Escolha o tipo de análise (Pedido ou OS) e aceda aos dashboards correspondentes.</p>
-        <a href="{{ url_for('mundo_os') }}" class="btn btn-primary action-card-button"> {# btn-lg removido para consistência com o exemplo #}
-            <i class="fas fa-chart-pie"></i> Aceder Análises
-        </a>
+<div class="card" style="margin-top: 3rem; max-width: 800px; margin-left: auto; margin-right: auto;">
+    <div class="card-header">
+        <h3><i class="fas fa-info-circle"></i> Sobre o Sistema</h3>
     </div>
-
-    {# Card: Relatório de Cobranças #}
-    <div class="action-card">
-        <div class="action-card-icon">
-            <i class="fas fa-file-invoice-dollar fa-3x"></i>
-        </div>
-        <h3 class="action-card-title">Relatório de Cobranças</h3>
-        <p class="action-card-description">Consulte e filtre todos os dados de cobranças registados no sistema.</p>
-        <a href="{{ url_for('relatorio_cobrancas') }}" class="btn btn-primary action-card-button">
-            <i class="fas fa-list-alt"></i> Ver Relatório
-        </a>
+    <div class="card-body">
+        <p>O Pólis foi desenhado para otimizar o seu fluxo de trabalho, oferecendo ferramentas para:</p>
+        <ul>
+            <li>Importação eficiente de dados de cobranças e pendências.</li>
+            <li>Visualização clara e dashboards interativos para análise de OS e Pedidos.</li>
+            <li>Geração de relatórios detalhados.</li>
+            <li>Acompanhamento de indicadores chave de desempenho.</li>
+            <li>Gestão de utilizadores e registo de auditoria para administradores.</li>
+        </ul>
+        <p>Explore as secções "Visuais", "Relatórios & Dados" e "Administração & Conta" no menu para começar.</p>
     </div>
-
-    {# Card: Relatório de Pendências #}
-    <div class="action-card">
-        <div class="action-card-icon">
-            <i class="fas fa-clipboard-list fa-3x"></i>
-        </div>
-        <h3 class="action-card-title">Relatório de Pendências</h3>
-        <p class="action-card-description">Visualize e filtre todas as pendências financeiras e operacionais.</p>
-        <a href="{{ url_for('relatorio_pendentes') }}" class="btn btn-primary action-card-button">
-            <i class="fas fa-list-alt"></i> Ver Relatório
-        </a>
-    </div>
-    
-    {# Card: Inserir Dados #}
-    <div class="action-card">
-        <div class="action-card-icon">
-            <i class="fas fa-file-upload fa-3x"></i>
-        </div>
-        <h3 class="action-card-title">Inserir Dados</h3>
-        <p class="action-card-description">Importe novas planilhas de cobranças ou pendências para o sistema.</p>
-        {# Usando btn-primary para manter a consistência com o exemplo, mas pode ser btn-info se preferir destaque diferente #}
-        <a href="{{ url_for('inserir_dados') }}" class="btn btn-primary action-card-button"> 
-            <i class="fas fa-upload"></i> Importar Ficheiros
-        </a>
-    </div>
-
-    {# Card: Alterar Senha #}
-    <div class="action-card">
-        <div class="action-card-icon">
-            <i class="fas fa-user-shield fa-3x"></i>
-        </div>
-        <h3 class="action-card-title">Alterar Senha</h3>
-        <p class="action-card-description">Mantenha a sua conta segura atualizando a sua senha regularmente.</p>
-        {# Botão secundário, como no exemplo, mas pode ser primário se preferir #}
-        <a href="{{ url_for('change_password') }}" class="btn btn-secondary action-card-button"> 
-            <i class="fas fa-key"></i> Modificar Senha
-        </a>
-    </div>
-
-    {# Cards de Administração #}
-    {% if current_user.username in ADMIN_USERNAMES %}
-    <div class="action-card">
-        <div class="action-card-icon">
-            <i class="fas fa-user-plus fa-3x"></i>
-        </div>
-        <h3 class="action-card-title">Adicionar Utilizador</h3>
-        <p class="action-card-description">Crie novas contas de utilizador para acesso ao sistema (Administração).</p>
-        <a href="{{ url_for('add_user_admin') }}" class="btn btn-secondary action-card-button">
-            <i class="fas fa-user-edit"></i> Gerir Utilizadores
-        </a>
-    </div>
-
-    <div class="action-card">
-        <div class="action-card-icon">
-            <i class="fas fa-history fa-3x"></i>
-        </div>
-        <h3 class="action-card-title">Log de Auditoria</h3>
-        <p class="action-card-description">Consulte o registo de todas as ações importantes realizadas no sistema (Administração).</p>
-        <a href="{{ url_for('view_audit_log') }}" class="btn btn-secondary action-card-button">
-            <i class="fas fa-search-location"></i> Ver Logs
-        </a>
-    </div>
-    {% endif %}
 </div>
+
+{# Pode adicionar aqui mais informações ou um resumo visual se desejar no futuro #}
+
 {% endblock %}
 
 {% block head_extra %}
 {{ super() }}
 <style>
-    .page-header.text-center .page-title { display: block; border-bottom: none; margin-bottom: 0.5rem; }
-    .home-hero-subtitle { margin-bottom: 2.5rem; }
-    
-    .home-actions-grid { 
-        display: grid; 
-        grid-template-columns: repeat(auto-fit, minmax(min(100%/1, 280px), 1fr)); /* Ajustado para melhor responsividade e tamanho mínimo */
-        gap: 1.75rem; /* Aumentar um pouco o espaçamento */
-        margin-bottom: 3rem; 
+    /* Estilos específicos para a nova home, se necessário */
+    .page-header.text-center .page-title { 
+        display: block; 
+        border-bottom: none; 
+        margin-bottom: 0.5rem; 
     }
-
-    .action-card { 
-        background-color: var(--card-bg); 
-        border-radius: var(--border-radius-base); 
-        box-shadow: var(--card-box-shadow); 
-        padding: 2rem 1.5rem; /* Padding consistente */
-        text-align: center; 
-        display: flex; 
-        flex-direction: column; 
-        align-items: center; 
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; 
+    .home-hero-subtitle { 
+        margin-bottom: 2.5rem; 
     }
-    .action-card:hover { 
-        transform: translateY(-5px); 
-        box-shadow: var(--card-hover-box-shadow); 
-    }
-
-    .action-card-icon { 
-        color: var(--accent-color); 
-        margin-bottom: 1.25rem; 
-    }
-    .action-card-icon .fas { 
-        font-size: 2.25rem; /* Tamanho do ícone um pouco menor para mais espaço */
-    }
-
-    .action-card-title { 
-        font-size: 1.2rem; /* Ajustar tamanho do título */
-        color: var(--text-color); 
-        margin-bottom: 0.75rem; 
-        font-weight: 600; 
-    }
-
-    .action-card-description { 
-        font-size: 0.875rem; 
-        color: var(--text-muted-color); 
-        margin-bottom: 1.5rem; 
-        flex-grow: 1; 
-        min-height: 3.8em; /* Ajustar min-height para acomodar 2-3 linhas de texto confortavelmente */
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1.5; /* Melhorar legibilidade da descrição */
-    }
-
-    .action-card-button { /* Estilo base para todos os botões de ação nos cards */
-        padding: 0.65rem 1.25rem; 
-        font-size: 0.9rem; 
-        width: auto; /* Deixar o botão ajustar-se ao conteúdo */
-        min-width: 180px; /* Largura mínima para boa aparência */
-        max-width: 90%;   /* Evitar que o botão fique muito largo em cards largos */
-        margin-top: auto; 
-        display: inline-flex; /* Para alinhar ícone e texto */
-        align-items: center;
-        justify-content: center;
-    }
-    .action-card-button .fas {
-        margin-right: 0.5em;
-    }
-
-    /* Media queries para ajustar o número de colunas */
-    @media (min-width: 600px) { /* Para 2 colunas em telas um pouco maiores */
-        .home-actions-grid {
-            grid-template-columns: repeat(auto-fit, minmax(min(100%/2, 280px), 1fr));
-        }
-    }
-    @media (min-width: 992px) { /* Para até 3 colunas em telas largas */
-         .home-actions-grid {
-            grid-template-columns: repeat(auto-fit, minmax(min(100%/3, 280px), 1fr));
-        }
-    }
-     @media (min-width: 1300px) { /* Para até 4 colunas em telas extra largas, se couber */
-         .home-actions-grid {
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        }
-    }
+    /* Remover estilos de .home-actions-grid e .action-card se não forem mais usados em nenhum outro template */
 </style>
 {% endblock %}

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-br" data-theme="azul-transac-light"> {# Tema padrão: Azul Transac - Claro #}
+<html lang="pt-br" data-theme="dia"> {# Tema padrão inicial: Dia #}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -19,36 +19,103 @@
         .nav-icon-theme { 
             font-size: 1.1rem; color: var(--text-muted-color); 
         }
-        html[data-theme$="-dark"] .nav-icon-theme { /* Corrigido para o tema escuro novo */
+        html[data-theme="noite"] .nav-icon-theme {
              color: var(--text-muted-color);
         }
-        html[data-theme="noite"] .nav-icon-theme { /* Específico para o nome do tema "noite" */
-             color: var(--text-muted-color);
+        
+        /* Estilos para Dropdown na Navegação */
+        .main-nav .nav-item.dropdown { 
+            position: relative; 
         }
-        .page-actions { 
-            margin-bottom: 1.5rem; 
-            display: flex; 
-            justify-content: flex-start; 
-            align-items: center; 
-        }
-        .btn-voltar {
-            display: inline-flex;
-            align-items: center;
-            padding: 0.4rem 0.8rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--text-muted-color);
-            background-color: transparent;
-            border: 1px solid var(--input-border-color);
-            border-radius: var(--border-radius-base);
-            text-decoration: none;
-            transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
-        }
-        .btn-voltar .fas { margin-right: 0.5em; }
-        .btn-voltar:hover {
+        .main-nav .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%; 
+            left: 0; 
+            z-index: 1000;
+            min-width: 240px; 
+            padding: 0.5rem 0;
+            margin: 2px 0 0; 
+            font-size: 0.9rem;
             color: var(--text-color);
-            background-color: var(--table-hover-bg); 
-            border-color: var(--input-focus-border-color);
+            text-align: left;
+            list-style: none;
+            background-color: var(--card-bg); 
+            background-clip: padding-box;
+            border: 1px solid var(--card-border-color);
+            border-radius: 0 0 var(--border-radius-base) var(--border-radius-base); 
+            box-shadow: var(--box-shadow-md);
+            opacity: 0; 
+            visibility: hidden; 
+            transform: translateY(10px); 
+            transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out, transform 0.2s ease-in-out;
+        }
+        
+        .main-nav .nav-item-group-right .nav-item.dropdown .dropdown-menu {
+            left: auto; 
+            right: 0; 
+        }
+
+        .main-nav .nav-item.dropdown:hover > .dropdown-menu,
+        .main-nav .nav-item.dropdown > .nav-item:focus + .dropdown-menu, 
+        .main-nav .nav-item.dropdown > .dropdown-menu:hover { 
+            display: block; 
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+        .main-nav .dropdown-item {
+            display: block;
+            width: 100%;
+            padding: 0.65rem 1.3rem; 
+            clear: both;
+            font-weight: 400;
+            color: var(--text-color); 
+            text-align: inherit;
+            white-space: nowrap;
+            background-color: transparent;
+            border: 0;
+            text-decoration: none;
+            transition: background-color 0.15s ease-out, color 0.15s ease-out;
+        }
+        .main-nav .dropdown-item .fas { 
+            margin-right: 0.75em; 
+            width: 1.4em; /* Ajustado para melhor alinhamento */
+            text-align: center;
+            color: var(--text-muted-color); 
+        }
+        html[data-theme="noite"] .main-nav .dropdown-item .fas {
+            color: var(--text-muted-color);
+        }
+        .main-nav .dropdown-item:hover,
+        .main-nav .dropdown-item:focus {
+            color: var(--link-hover-color); 
+            background-color: var(--main-nav-dropdown-item-hover-bg); /* Usar variável de tema */
+        }
+        .main-nav .dropdown-item.active,
+        .main-nav .dropdown-item:active {
+            color: var(--main-nav-link-active-text-color); 
+            background-color: var(--main-nav-link-active-bg);
+        }
+        .main-nav .nav-item.dropdown > a.nav-item::after { 
+            display: inline-block;
+            margin-left: .45em; 
+            vertical-align: .2em; 
+            content: "";
+            border-top: .35em solid; 
+            border-right: .35em solid transparent;
+            border-bottom: 0;
+            border-left: .35em solid transparent;
+            transition: transform 0.2s ease-in-out;
+        }
+        .main-nav .nav-item.dropdown:hover > a.nav-item::after {
+            transform: rotate(180deg); 
+        }
+        .dropdown-divider { 
+            height: 0;
+            margin: .5rem 0;
+            overflow: hidden;
+            border-top: 1px solid var(--main-nav-dropdown-border-color); /* Usar variável de tema */
         }
     </style>
     {% endblock %}
@@ -75,7 +142,6 @@
                     <label for="theme-select" class="sr-only">Selecionar Tema</label>
                     <i class="fas fa-palette nav-icon-theme" aria-hidden="true"></i>
                     <select id="theme-select" title="Selecionar Tema Visual">
-                        {# Mantendo o select simplificado para Dia/Noite #}
                         <option value="dia">Pólis Dia</option>
                         <option value="noite">Pólis Noite</option>
                     </select>
@@ -84,22 +150,55 @@
         </div>
     </header>
 
-    {# BARRA DE NAVEGAÇÃO SECUNDÁRIA REMOVIDA #}
-    {# {% if current_user.is_authenticated %}
+    {% if current_user.is_authenticated %}
     <nav class="main-nav">
-        ... (conteúdo anterior da nav aqui) ...
+        <div class="main-nav-links container"> 
+            {# Link "Home Pólis" REMOVIDO daqui #}
+            
+            <div class="nav-item dropdown">
+                <a href="#" class="nav-item {{ 'active' if request.endpoint in ['mundo_os', 'dashboard_pedidos', 'dashboard_manutencao', 'indicadores_desempenho'] else '' }}" onclick="event.preventDefault(); return false;">
+                    <i class="fas fa-eye"></i> Visuais
+                </a>
+                <div class="dropdown-menu">
+                    <a class="dropdown-item {{ 'active' if request.endpoint == 'mundo_os' else '' }}" href="{{ url_for('mundo_os') }}"><i class="fas fa-sitemap"></i> Mundo de OS (Dashboards)</a>
+                    <a class="dropdown-item {{ 'active' if request.endpoint == 'indicadores_desempenho' else '' }}" href="{{ url_for('indicadores_desempenho') }}"><i class="fas fa-chart-line"></i> Indicadores de Desempenho</a>
+                </div>
+            </div>
+
+            <div class="nav-item dropdown">
+                 <a href="#" class="nav-item {{ 'active' if request.endpoint in ['relatorio_cobrancas', 'relatorio_pendentes', 'inserir_dados'] else '' }}" onclick="event.preventDefault(); return false;">
+                    <i class="fas fa-file-alt"></i> Relatórios & Dados
+                </a>
+                <div class="dropdown-menu">
+                    <a class="dropdown-item {{ 'active' if request.endpoint == 'relatorio_cobrancas' else '' }}" href="{{ url_for('relatorio_cobrancas') }}"><i class="fas fa-file-invoice-dollar"></i> Rel. Cobranças</a>
+                    <a class="dropdown-item {{ 'active' if request.endpoint == 'relatorio_pendentes' else '' }}" href="{{ url_for('relatorio_pendentes') }}"><i class="fas fa-clipboard-list"></i> Rel. Pendentes</a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item {{ 'active' if request.endpoint == 'inserir_dados' else '' }}" href="{{ url_for('inserir_dados') }}"><i class="fas fa-file-upload"></i> Inserir Dados</a>
+                </div>
+            </div>
+            
+            <div class="nav-item-group-right">
+                <div class="nav-item dropdown"> 
+                    <a href="#" class="nav-item {{ 'active' if request.endpoint in ['change_password', 'add_user_admin', 'view_audit_log'] else '' }}" onclick="event.preventDefault(); return false;">
+                        <i class="fas fa-user-cog"></i> Administração & Conta
+                    </a>
+                    <div class="dropdown-menu"> 
+                        <a class="dropdown-item {{ 'active' if request.endpoint == 'change_password' else '' }}" href="{{ url_for('change_password') }}"><i class="fas fa-key"></i> Alterar Senha</a>
+                        {% if current_user.username in ADMIN_USERNAMES %}
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item {{ 'active' if request.endpoint == 'add_user_admin' else '' }}" href="{{ url_for('add_user_admin') }}"><i class="fas fa-user-plus"></i> Adicionar Utilizador</a>
+                            <a class="dropdown-item {{ 'active' if request.endpoint == 'view_audit_log' else '' }}" href="{{ url_for('view_audit_log') }}"><i class="fas fa-history"></i> Log de Auditoria</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
     </nav>
-    {% endif %} #}
+    {% endif %}
 
     <main class="container content-wrapper">
-        {% if pagina_anterior_url %}
-            <div class="page-actions">
-                <a href="{{ pagina_anterior_url }}" class="btn-voltar">
-                    <i class="fas fa-arrow-left"></i> {{ pagina_anterior_texto | default('Voltar') }}
-                </a>
-            </div>
-        {% endif %}
-
+        {# O bloco do botão Voltar foi removido globalmente #}
+        
         {% block before_flash_messages %}{% endblock %}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -122,11 +221,11 @@
         (function() {
             const themeSelect = document.getElementById('theme-select');
             const htmlEl = document.documentElement;
-            const storageKey = 'polisAppPreferredTheme_v4_dia_noite'; // Chave atualizada
+            const storageKey = 'polisAppPreferredTheme_v4_dia_noite'; 
 
             function applyTheme(themeName) {
                 if (themeName) {
-                    htmlEl.setAttribute('data-theme', themeName); // "dia" ou "noite"
+                    htmlEl.setAttribute('data-theme', themeName); 
                     localStorage.setItem(storageKey, themeName);
                     if (themeSelect && themeSelect.value !== themeName) {
                         themeSelect.value = themeName;
@@ -136,9 +235,9 @@
 
             let preferredTheme = localStorage.getItem(storageKey);
             if (!preferredTheme) {
-                const defaultBaseTheme = 'dia'; // Padrão para o tema claro
+                const defaultBaseTheme = 'dia'; 
                 if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                    preferredTheme = 'noite'; // Muda para noite se o sistema preferir
+                    preferredTheme = 'noite';
                 } else {
                     preferredTheme = defaultBaseTheme;
                 }
@@ -147,7 +246,7 @@
 
             if (themeSelect) {
                 themeSelect.addEventListener('change', function() {
-                    applyTheme(this.value); // "dia" ou "noite"
+                    applyTheme(this.value); 
                 });
             }
         })();

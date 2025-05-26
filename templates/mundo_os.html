@@ -3,10 +3,10 @@
 {% block title %}Mundo de OS - Pólis{% endblock %}
 
 {% block content %}
-{# O botão Voltar será renderizado pelo base.html se pagina_anterior_url for passado pela rota #}
+{# O botão Voltar foi removido do base.html e das rotas #}
 
 <div class="page-header text-center"> 
-    <h2 class="page-title"><i class="fas fa-sitemap"></i> Mundo de OS - Escolha sua Análise</h2>
+    <h2 class="page-title"><i class="fas fa-sitemap"></i> Mundo de OS - Escolha sua Análise de Dashboard</h2>
 </div>
 
 <div class="home-actions-grid" style="margin-top: 2rem;">
@@ -32,20 +32,7 @@
         </a>
     </div>
 
-    {# NOVO CARD PARA INDICADORES DE DESEMPENHO #}
-    <div class="action-card">
-        <div class="action-card-icon">
-            <i class="fas fa-chart-bar fa-3x"></i> {# Ícone para Indicadores #}
-        </div>
-        <h3 class="action-card-title">Indicadores de Desempenho</h3>
-        <p class="action-card-description">Acompanhe os principais indicadores e métricas de desempenho do sistema.</p>
-        {# ATENÇÃO: 'indicadores_desempenho' precisa ser uma rota válida no app.py #}
-        {# Por agora, vou deixar como placeholder, ou podemos apontar para um dashboard existente se fizer sentido #}
-        <a href="{{ url_for('indicadores_desempenho') }}" class="btn btn-primary action-card-button"> {# Temporariamente aponta para dashboard_pedidos #}
-        {# <a href="#" class="btn btn-primary action-card-button disabled" title="Em breve"> #}
-            <i class="fas fa-tachometer-alt"></i> Ver Indicadores
-        </a>
-    </div>
+    {# Card para Indicadores de Desempenho REMOVIDO daqui, pois o acesso é pelo menu superior #}
 </div>
 {% endblock %}
 
@@ -59,20 +46,17 @@
     }
      .home-actions-grid {
         display: grid;
-        /* Ajustado para tentar 3 colunas quando possível, senão 2 ou 1 */
-        grid-template-columns: repeat(auto-fit, minmax(min(100%/1, 300px), 1fr)); 
+        grid-template-columns: repeat(auto-fit, minmax(min(100%/1, 320px), 1fr)); /* Ajustado para 2 colunas se couber */
         gap: 2rem; 
         margin-bottom: 3rem;
         margin-top: 1rem; 
+        max-width: 800px; /* Limitar largura máxima da grid */
+        margin-left: auto;
+        margin-right: auto;
     }
-    @media (min-width: 700px) { /* A partir de 700px, tenta 2 colunas */
+    @media (min-width: 720px) { /* Ajuste para garantir 2 colunas */
         .home-actions-grid {
-            grid-template-columns: repeat(auto-fit, minmax(min(100%/2, 300px), 1fr));
-        }
-    }
-    @media (min-width: 1050px) { /* A partir de 1050px, tenta 3 colunas */
-        .home-actions-grid {
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
         }
     }
 
@@ -99,7 +83,7 @@
         color: var(--text-muted-color); 
         margin-bottom: 1.5rem; 
         flex-grow: 1; 
-        min-height: 3.8em; /* Para ajudar a alinhar cartões com descrições de tamanhos diferentes */
+        min-height: 3.8em; 
         display: flex;
         align-items: center;
         justify-content: center;
@@ -109,19 +93,7 @@
         font-size: 0.95rem; 
         width: 90%; 
         max-width: 280px; 
-        margin-top: auto; /* Garante que o botão fique em baixo */
-    }
-    .action-card-button.disabled {
-        background-color: var(--btn-secondary-bg);
-        border-color: var(--btn-secondary-border);
-        color: var(--text-muted-color);
-        cursor: not-allowed;
-        pointer-events: none;
-    }
-    html[data-theme="noite"] .action-card-button.disabled {
-        background-color: var(--btn-secondary-bg-D);
-        border-color: var(--btn-secondary-border-D);
-        color: var(--text-muted-color);
+        margin-top: auto; 
     }
 </style>
 {% endblock %}
