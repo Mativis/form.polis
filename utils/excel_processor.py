@@ -105,7 +105,8 @@ def categorizar_conformidade(conformidade_original):
     if conformidade_lower: logger.warning(f"Conformidade '{conformidade_original}' não categorizada, assumindo 'Verificar'."); return "Verificar"
     return "Verificar"
 
-# --- Funções de Processamento de Excel/CSV ---
+# --- Funções de Processamento de Excel/CSV (mantidas) ---
+# ... (processar_excel_cobrancas e processar_excel_pendentes mantidas como na versão anterior) ...
 def processar_excel_cobrancas(file_path, file_extension, db_name):
     logger.info(f"Processando cobranças: {file_path} para DB: {db_name}")
     conn = None
@@ -127,63 +128,33 @@ def processar_excel_cobrancas(file_path, file_extension, db_name):
             if found: mapped_df[conceptual] = df_cobrancas[found]
             else: missing_cols.append(f"'{options[0]}'")
         if missing_cols: msg = f"Colunas faltando em Cobranças: {', '.join(missing_cols)}. Disponíveis: {original_columns}."; logger.error(msg); return False, msg
-        
         df_final = mapped_df.copy()
         df_final['status_categorizado'] = df_final['status'].apply(categorizar_status_cobranca)
         df_final['conformidade_categorizada'] = df_final['conformidade'].apply(categorizar_conformidade)
-
-        conn = sqlite3.connect(db_name)
-        conn.row_factory = sqlite3.Row # CORREÇÃO: Definir row_factory para esta conexão
-        cursor = conn.cursor()
-        novos, atualizados, ignorados = 0,0,0
-        
+        conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor(); novos, atualizados, ignorados = 0,0,0
         cursor.execute("SELECT pedido_ref, data_emissao FROM pendentes WHERE data_emissao IS NOT NULL")
         datas_emissao_pendentes = {row['pedido_ref']: row['data_emissao'] for row in cursor.fetchall()}
-        
         for _, row in df_final.iterrows():
             pedido = str(row.get('pedido', '')).strip(); os_val = str(row.get('os', '')).strip()
             if not pedido or not os_val: ignorados += 1; continue
-            
-            # É importante que o cursor para esta query também use a row_factory se for aceder por nome
-            # No entanto, aqui estamos apenas a verificar a existência e a obter um valor, então não é crítico.
-            # Mas para consistência, poderia ser conn.row_factory = sqlite3.Row no início da função.
-            cursor.execute("SELECT id, data_emissao_pedido FROM cobrancas WHERE pedido = ? AND os = ?", (pedido, os_val))
-            existing_record = cursor.fetchone()
-            
+            cursor.execute("SELECT id, data_emissao_pedido FROM cobrancas WHERE pedido = ? AND os = ?", (pedido, os_val)); existing_record = cursor.fetchone()
             dt_utc = datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
             status_final = row.get('status_categorizado'); conformidade_final = row.get('conformidade_categorizada')
             data_emissao_pedido_val = datas_emissao_pendentes.get(pedido) 
-            
-            if existing_record and existing_record['data_emissao_pedido'] and data_emissao_pedido_val: 
-                # Se já existe uma data de emissão na cobrança e também encontramos uma nova, mantemos a existente.
-                # Ajuste esta lógica se a data da pendente (mais recente) deve sobrescrever.
-                data_emissao_pedido_val = existing_record['data_emissao_pedido']
-            
-            dados_insert = (pedido, os_val, str(row.get('filial','')).strip(), str(row.get('placa','')).strip(), 
-                            str(row.get('transportadora','')).strip(), conformidade_final, status_final, 
-                            data_emissao_pedido_val, dt_utc)
-            dados_update = (str(row.get('filial','')).strip(), str(row.get('placa','')).strip(), 
-                            str(row.get('transportadora','')).strip(), conformidade_final, status_final, 
-                            data_emissao_pedido_val, dt_utc, pedido, os_val)
+            if existing_record and existing_record['data_emissao_pedido'] and data_emissao_pedido_val: data_emissao_pedido_val = existing_record['data_emissao_pedido']
+            dados_insert = (pedido, os_val, str(row.get('filial','')).strip(), str(row.get('placa','')).strip(), str(row.get('transportadora','')).strip(), conformidade_final, status_final, data_emissao_pedido_val, dt_utc)
+            dados_update = (str(row.get('filial','')).strip(), str(row.get('placa','')).strip(), str(row.get('transportadora','')).strip(), conformidade_final, status_final, data_emissao_pedido_val, dt_utc, pedido, os_val)
             try:
-                if existing_record: 
-                    cursor.execute("UPDATE cobrancas SET filial=?, placa=?, transportadora=?, conformidade=?, status=?, data_emissao_pedido=?, data_importacao=? WHERE pedido=? AND os=?", dados_update)
-                    atualizados += 1
-                else: 
-                    cursor.execute("INSERT INTO cobrancas (pedido, os, filial, placa, transportadora, conformidade, status, data_emissao_pedido, data_importacao) VALUES (?,?,?,?,?,?,?,?,?)", dados_insert)
-                    novos += 1
+                if existing_record: cursor.execute("UPDATE cobrancas SET filial=?, placa=?, transportadora=?, conformidade=?, status=?, data_emissao_pedido=?, data_importacao=? WHERE pedido=? AND os=?", dados_update); atualizados += 1
+                else: cursor.execute("INSERT INTO cobrancas (pedido, os, filial, placa, transportadora, conformidade, status, data_emissao_pedido, data_importacao) VALUES (?,?,?,?,?,?,?,?,?)", dados_insert); novos += 1
             except sqlite3.Error as e_sql: logger.error(f"SQL Erro Cobrança (P:{pedido},OS:{os_val}): {e_sql}"); ignorados +=1
-        conn.commit()
-        return True, f"Cobranças: {novos} novos, {atualizados} atualizados, {ignorados} ignorados."
+        conn.commit(); return True, f"Cobranças: {novos} novos, {atualizados} atualizados, {ignorados} ignorados."
     except FileNotFoundError: return False, f"Ficheiro não encontrado: {file_path}"
-    except Exception as e: 
-        logger.error(f"Erro inesperado ao processar cobranças: {e}", exc_info=True)
-        return False, f"Erro inesperado ao processar cobranças: {str(e)}"
+    except Exception as e: logger.error(f"Erro inesperado ao processar cobranças: {e}", exc_info=True); return False, f"Erro inesperado: {str(e)}"
     finally:
         if conn: conn.close()
-    return False, "Erro desconhecido no processamento de cobranças." # Salvaguarda
+    return False, "Erro desconhecido no processamento de cobranças."
 
-# ... (restante do ficheiro excel_processor.py como na versão anterior ID: excel_processor_py_kpis_com_filtros_data)
 def processar_excel_pendentes(file_path, file_extension, db_name):
     logger.info(f"Processando pendências: {file_path} para DB: {db_name}")
     conn = None
@@ -230,7 +201,7 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
             mapped_df[concept_key] = df_pendentes[found_col] if found_col else pd.Series([None]*len(df_pendentes), dtype=str)
         
         conn = sqlite3.connect(db_name); 
-        conn.row_factory = sqlite3.Row # Aplicar row_factory à conexão local
+        conn.row_factory = sqlite3.Row 
         cursor = conn.cursor()
         logger.warning("Limpando tabela 'pendentes'."); cursor.execute("DELETE FROM pendentes")
         adicionados, ignorados, atualizacoes_cobrancas = 0,0,0
@@ -273,7 +244,9 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
         if conn: conn.close()
     return False, "Erro desconhecido no processamento de pendências."
 
+# --- Funções de Leitura de Dados (mantidas) ---
 def get_cobrancas(filtros=None, db_name='polis_database.db'):
+    # ... (código mantido)
     conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
     query = "SELECT id, pedido, os, filial, placa, transportadora, conformidade, status, data_emissao_pedido, strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt, strftime('%d/%m/%Y', data_emissao_pedido) as data_emissao_pedido_fmt FROM cobrancas"
     conditions, params = [], []
@@ -296,6 +269,7 @@ def get_cobrancas(filtros=None, db_name='polis_database.db'):
         if conn: conn.close()
 
 def get_pendentes(filtros=None, db_name='polis_database.db'):
+    # ... (código mantido)
     conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
     query = "SELECT id, pedido_ref, fornecedor, filial, valor, status, data_emissao, data_finalizacao_real, strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt, strftime('%d/%m/%Y', data_emissao) as data_emissao_fmt, strftime('%d/%m/%Y', data_finalizacao_real) as data_finalizacao_real_fmt FROM pendentes"
     conditions, params = [], []
@@ -318,6 +292,7 @@ def get_pendentes(filtros=None, db_name='polis_database.db'):
         if conn: conn.close()
 
 def get_distinct_values(column_name, table_name, db_name='polis_database.db'):
+    # ... (código mantido)
     conn = sqlite3.connect(db_name); cursor = conn.cursor()
     try:
         query = f"SELECT DISTINCT TRIM({column_name}) FROM {table_name} WHERE {column_name} IS NOT NULL AND TRIM({column_name}) != '' ORDER BY TRIM({column_name}) ASC"
@@ -327,6 +302,7 @@ def get_distinct_values(column_name, table_name, db_name='polis_database.db'):
         if conn: conn.close()
 
 def _build_date_filter_sql(date_column, data_de, data_ate):
+    # ... (código mantido)
     conditions = []
     params = []
     if data_de:
@@ -337,6 +313,8 @@ def _build_date_filter_sql(date_column, data_de, data_ate):
         if dt_ate_str: conditions.append(f"STRFTIME('%Y-%m-%d', {date_column}) <= ?"); params.append(dt_ate_str)
     return " AND ".join(conditions), params
 
+# --- Funções para Dashboard e KPIs com Filtro de Data (mantidas e ajustadas) ---
+# ... (get_count_pedidos_status_especifico, etc. mantidas como na versão anterior) ...
 def get_count_pedidos_status_especifico(status_desejado, db_name, data_de=None, data_ate=None):
     conn = None; date_filter_sql, date_params = "", []
     if data_de or data_ate:
@@ -518,6 +496,8 @@ def get_kpi_tempo_medio_resolucao_pendencias(db_name, data_de=None, data_ate=Non
         if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
+        # SQLite JULIANDAY calcula o número de dias desde uma data de referência.
+        # A diferença entre dois Julian Days dá o número de dias.
         query = f"""
             SELECT AVG(JULIANDAY(data_finalizacao_real) - JULIANDAY(data_emissao)) as tempo_medio_dias
             FROM pendentes
@@ -534,16 +514,45 @@ def get_kpi_tempo_medio_resolucao_pendencias(db_name, data_de=None, data_ate=Non
     finally:
         if conn: conn.close()
 
-def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=None, num_months=6):
+def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=None, granularidade='mes'):
     conn = None
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        data_de_query, data_ate_query = data_de, data_ate
-        if not data_de_query and not data_ate_query:
+        
+        date_format_sql = ""
+        pd_freq = ""
+        label_format_str = ""
+
+        if granularidade == 'dia':
+            date_format_sql = "%Y-%m-%d"
+            pd_freq = "D"
+            label_format_str = "%d/%m" # Dia/Mês
+        elif granularidade == 'semana':
+            date_format_sql = "%Y-%W" # Ano-Semana (00-53)
+            pd_freq = "W-MON" # Início da semana na Segunda
+            label_format_str = "Sem %W/%y" # Ex: Sem 23/25
+        else: # Default para mensal
+            granularidade = 'mes' # Garante que é 'mes' se não for dia ou semana
+            date_format_sql = "%Y-%m"
+            pd_freq = "MS" # Início do Mês
+            label_format_str = "%b/%y" # Mês Abreviado/Ano
+
+        # Determinar o intervalo de datas para os rótulos
+        # Se não houver filtro, usa os últimos 6 períodos da granularidade padrão (mês)
+        if not data_de and not data_ate:
             end_date_obj = datetime.now()
-            start_date_obj = end_date_obj - pd.DateOffset(months=num_months-1)
-            data_de_query = start_date_obj.strftime('%Y-%m-01')
+            if granularidade == 'dia':
+                start_date_obj = end_date_obj - timedelta(days=10) # Últimos 10 dias
+            elif granularidade == 'semana':
+                start_date_obj = end_date_obj - timedelta(weeks=12) # Últimas 12 semanas
+            else: # Mês
+                start_date_obj = end_date_obj - pd.DateOffset(months=5) # Últimos 6 meses (5 + atual)
+                start_date_obj = start_date_obj.replace(day=1)
+            data_de_query = start_date_obj.strftime('%Y-%m-%d')
             data_ate_query = end_date_obj.strftime('%Y-%m-%d')
+        else:
+            data_de_query = data_de
+            data_ate_query = data_ate
         
         date_filter_sql_cob, params_cob = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de_query, data_ate_query)
         if date_filter_sql_cob: date_filter_sql_cob = f" WHERE {date_filter_sql_cob}"
@@ -551,29 +560,42 @@ def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=Non
         date_filter_sql_pend, params_pend = _build_date_filter_sql("COALESCE(data_emissao, data_importacao)", data_de_query, data_ate_query)
         if date_filter_sql_pend: date_filter_sql_pend = f" WHERE {date_filter_sql_pend}"
 
-        query_cobrancas = f"SELECT strftime('%Y-%m', COALESCE(data_emissao_pedido, data_importacao)) as mes_ano, COUNT(DISTINCT pedido) as total_cobrancas FROM cobrancas {date_filter_sql_cob} GROUP BY mes_ano ORDER BY mes_ano ASC;"
+        query_cobrancas = f"SELECT strftime('{date_format_sql}', COALESCE(data_emissao_pedido, data_importacao)) as periodo, COUNT(DISTINCT pedido) as total_cobrancas FROM cobrancas {date_filter_sql_cob} GROUP BY periodo ORDER BY periodo ASC;"
         cursor.execute(query_cobrancas, tuple(params_cob))
-        cobrancas_raw = {row['mes_ano']: row['total_cobrancas'] for row in cursor.fetchall()}
+        cobrancas_raw = {row['periodo']: row['total_cobrancas'] for row in cursor.fetchall()}
 
-        query_pendentes = f"SELECT strftime('%Y-%m', COALESCE(data_emissao, data_importacao)) as mes_ano, COUNT(DISTINCT pedido_ref) as total_pendencias FROM pendentes {date_filter_sql_pend} GROUP BY mes_ano ORDER BY mes_ano ASC;"
+        query_pendentes = f"SELECT strftime('{date_format_sql}', COALESCE(data_emissao, data_importacao)) as periodo, COUNT(DISTINCT pedido_ref) as total_pendencias FROM pendentes {date_filter_sql_pend} GROUP BY periodo ORDER BY periodo ASC;"
         cursor.execute(query_pendentes, tuple(params_pend))
-        pendentes_raw = {row['mes_ano']: row['total_pendencias'] for row in cursor.fetchall()}
+        pendentes_raw = {row['periodo']: row['total_pendencias'] for row in cursor.fetchall()}
         
-        start_dt = datetime.strptime(data_de_query, '%Y-%m-%d') if data_de_query else (datetime.now() - pd.DateOffset(months=num_months-1)).replace(day=1)
+        start_dt = datetime.strptime(data_de_query, '%Y-%m-%d') if data_de_query else (datetime.now() - pd.DateOffset(months=5)).replace(day=1)
         end_dt = datetime.strptime(data_ate_query, '%Y-%m-%d') if data_ate_query else datetime.now()
+        
+        # Ajustar start_dt para o início da semana se a granularidade for semanal
+        if granularidade == 'semana' and start_dt:
+            start_dt = start_dt - timedelta(days=start_dt.weekday())
 
-        meses_no_intervalo = pd.date_range(start=start_dt, end=end_dt, freq='MS').strftime('%Y-%m').tolist()
-        labels_grafico = pd.date_range(start=start_dt, end=end_dt, freq='MS').strftime('%b/%y').tolist()
-        if not meses_no_intervalo and (data_de_query or data_ate_query): 
-             labels_grafico = [start_dt.strftime('%b/%y')] if start_dt == end_dt else [start_dt.strftime('%b/%y'), end_dt.strftime('%b/%y')]
-             meses_no_intervalo = [start_dt.strftime('%Y-%m')] if start_dt == end_dt else [start_dt.strftime('%Y-%m'), end_dt.strftime('%Y-%m')]
 
-        dados_cobrancas_grafico = [cobrancas_raw.get(mes, 0) for mes in meses_no_intervalo]
-        dados_pendencias_grafico = [pendentes_raw.get(mes, 0) for mes in meses_no_intervalo]
+        periodos_no_intervalo = pd.date_range(start=start_dt, end=end_dt, freq=pd_freq).strftime(date_format_sql).tolist()
+        labels_grafico = pd.date_range(start=start_dt, end=end_dt, freq=pd_freq).strftime(label_format_str).tolist()
+        
+        if not periodos_no_intervalo and (data_de_query or data_ate_query): 
+            if start_dt.strftime(date_format_sql) == end_dt.strftime(date_format_sql): # Mesmo período
+                 labels_grafico = [start_dt.strftime(label_format_str)]
+                 periodos_no_intervalo = [start_dt.strftime(date_format_sql)]
+            else: 
+                 labels_grafico = [start_dt.strftime(label_format_str), end_dt.strftime(label_format_str)]
+                 periodos_no_intervalo = [start_dt.strftime(date_format_sql), end_dt.strftime(date_format_sql)]
+
+        dados_cobrancas_grafico = [cobrancas_raw.get(p, 0) for p in periodos_no_intervalo]
+        dados_pendencias_grafico = [pendentes_raw.get(p, 0) for p in periodos_no_intervalo]
             
         return {'labels': labels_grafico, 'cobrancas_data': dados_cobrancas_grafico, 'pendencias_data': dados_pendencias_grafico}
     except sqlite3.Error as e:
-        logger.error(f"Erro SQL ao buscar evolução mensal: {e}")
+        logger.error(f"Erro SQL ao buscar evolução ({granularidade}): {e}")
+        return {'labels': [], 'cobrancas_data': [], 'pendencias_data': []}
+    except Exception as e_gen:
+        logger.error(f"Erro geral ao buscar evolução ({granularidade}): {e_gen}", exc_info=True)
         return {'labels': [], 'cobrancas_data': [], 'pendencias_data': []}
     finally:
         if conn: conn.close()

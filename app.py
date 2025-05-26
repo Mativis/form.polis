@@ -6,7 +6,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from functools import wraps
-from datetime import datetime, timedelta # Adicionado timedelta
+from datetime import datetime, timedelta 
 import logging
 import pytz
 import re
@@ -25,30 +25,28 @@ from utils.excel_processor import (
     get_pendencia_by_id,
     update_pendencia_db,
     delete_pendencia_db,
-    # Funções do Dashboard de Pedidos
     get_count_pedidos_status_especifico,
     get_placas_status_especifico, 
     get_count_total_pedidos_lancados,
     get_count_pedidos_nao_conforme,
     get_pedidos_status_por_filial,
-    # Funções para Dashboard de Manutenção (OS)
     get_count_os_status_especifico,
     get_count_total_os_lancadas,
     get_count_os_para_verificar,
     get_os_status_por_filial,
     get_os_com_status_especifico,
-    # Funções de KPI
     get_kpi_taxa_cobranca_efetuada,
     get_kpi_percentual_nao_conforme,
     get_kpi_valor_total_pendencias_ativas,
-    # Funções para Gráficos
-    get_evolucao_mensal_cobrancas_pendencias,
+    get_kpi_tempo_medio_resolucao_pendencias,
+    get_evolucao_mensal_cobrancas_pendencias, # ATUALIZADO para aceitar granularidade
     get_distribuicao_status_cobranca
 )
 
 app = Flask(__name__)
 
-# --- Configurações da Aplicação ---
+# --- Configurações, Logging, DB Helpers, Flask-Login, Decoradores, Log Auditoria, Filtros Jinja (mantidos) ---
+# ... (código mantido como na versão anterior - ID: app_py_kpis_v1)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(32))
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['DATABASE'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'polis_database.db')
@@ -56,19 +54,10 @@ app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_SESSION_COOKIE_SECUR
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' 
 ALLOWED_EXTENSIONS = {'xlsx', 'csv'}
-
-# --- Configuração do Logging ---
 log_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'polis_app.log')
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
-    handlers=[ logging.FileHandler(log_file_path, encoding='utf-8'), logging.StreamHandler()]
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s', handlers=[ logging.FileHandler(log_file_path, encoding='utf-8'), logging.StreamHandler()])
 logger = logging.getLogger(__name__)
-if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
-
-# --- Helpers de Conexão com Banco de Dados ---
+if not os.path.exists(app.config['UPLOAD_FOLDER']): os.makedirs(app.config['UPLOAD_FOLDER'])
 def get_db():
     db = getattr(g, '_database', None)
     if db is None: db = g._database = sqlite3.connect(app.config['DATABASE']); db.row_factory = sqlite3.Row
@@ -77,8 +66,6 @@ def get_db():
 def close_connection(exception):
     db = getattr(g, '_database', None)
     if db is not None: db.close()
-
-# --- Configuração do Flask-Login ---
 login_manager = LoginManager(); login_manager.init_app(app); login_manager.login_view = 'login'
 login_manager.login_message = "Por favor, faça login para aceder a esta página."; login_manager.login_message_category = "info"
 ADMIN_USERNAMES = ['admin', 'Splinter', 'Mativi']
@@ -95,8 +82,6 @@ def get_user_by_username_from_db(username):
         db = get_db(); cursor = db.cursor(); cursor.execute("SELECT id, username, password_hash FROM users WHERE username = ?", (username,))
         return cursor.fetchone()
     except Exception as e: logger.error(f"Erro ao buscar utilizador '{username}': {e}", exc_info=True); return None
-
-# --- Decoradores ---
 def admin_required(f):
     @wraps(f)
     @login_required
@@ -106,8 +91,6 @@ def admin_required(f):
             flash("Você não tem permissão para aceder a esta página.", "error"); return redirect(url_for('home'))
         return f(*args, **kwargs)
     return decorated_function
-
-# --- Log de Auditoria ---
 def log_audit(action: str, details: str = None):
     try:
         db = get_db(); user_id = current_user.id if current_user and current_user.is_authenticated else None
@@ -118,8 +101,6 @@ def log_audit(action: str, details: str = None):
                        (timestamp_utc.strftime('%Y-%m-%d %H:%M:%S'), user_id, username, action, str(details) if details else None, ip_address))
         db.commit(); logger.info(f"AUDIT_LOG: User '{username}' -> Action: {action}, Details: {details}")
     except Exception as e: logger.error(f"Erro ao logar auditoria (Action: {action}): {e}", exc_info=True)
-
-# --- Filtros e Processadores de Contexto Jinja ---
 @app.context_processor
 def inject_global_vars(): return dict(current_year=datetime.now().year, ADMIN_USERNAMES=ADMIN_USERNAMES)
 @app.template_filter('format_currency')
@@ -150,15 +131,11 @@ def normalize_for_css(value):
     norm = norm.replace('ç', 'c').replace('ã', 'a').replace('á', 'a').replace('é', 'e').replace('ê', 'e').replace('í', 'i')
     norm = norm.replace('ó', 'o').replace('ô', 'o').replace('õ', 'o').replace('ú', 'u').replace('ü', 'u')
     norm = re.sub(r'[^\w-]', '', norm); norm = re.sub(r'-+', '-', norm).strip('-'); return norm if norm else 'desconhecido'
-
-# --- Headers de Segurança ---
 @app.after_request
 def add_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'; response.headers['X-Frame-Options'] = 'SAMEORIGIN' 
     response.headers['X-XSS-Protection'] = '1; mode=block'; response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     return response
-
-# --- Rotas Principais e de Autenticação ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated: return redirect(url_for('home'))
@@ -171,26 +148,18 @@ def login():
             flash('Login realizado com sucesso!', 'success'); next_page = request.args.get('next'); return redirect(next_page or url_for('home')) 
         else: log_audit("LOGIN_FAILURE", f"Tentativa login falhou para '{username}'."); flash('Utilizador ou senha inválidos.', 'error')
     return render_template('login.html')
-
 @app.route('/logout')
 @login_required
 def logout():
     username_logged_out = current_user.username; logout_user(); log_audit("LOGOUT", f"Utilizador '{username_logged_out}' deslogado.")
     flash('Você foi desconectado com sucesso.', 'success'); return redirect(url_for('login'))
-
 @app.route('/') 
 @login_required
-def home(): 
-    return render_template('home.html')
-
+def home(): return render_template('home.html')
 @app.route('/mundo-os') 
 @login_required
 def mundo_os():
-    return render_template('mundo_os.html', 
-                           pagina_anterior_url=url_for('home'), 
-                           pagina_anterior_texto="Home Pólis")
-
-# --- Rota de Inserção de Dados ---
+    return render_template('mundo_os.html', pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
 def allowed_file(filename): return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 @app.route('/inserir-dados', methods=['GET', 'POST'])
 @login_required
@@ -218,11 +187,7 @@ def inserir_dados():
                 try: os.remove(file_path)
                 except Exception as e_rem: logger.error(f"Erro ao remover '{file_path}': {e_rem}")
         return redirect(url_for('inserir_dados') + anchor)
-    return render_template('inserir_dados.html', 
-                           pagina_anterior_url=url_for('home'),
-                           pagina_anterior_texto="Home Pólis")
-
-# --- Rotas de Administração ---
+    return render_template('inserir_dados.html', pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
 @app.route('/admin/add_user', methods=['GET', 'POST'])
 @admin_required
 def add_user_admin():
@@ -246,7 +211,6 @@ def add_user_admin():
             for error_msg in form_errors.values(): flash(error_msg, 'error')
         return render_template('admin/add_user.html', username=form_data.get('username',''), form_errors=form_errors, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
     return render_template('admin/add_user.html', username='', form_errors={}, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
-
 @app.route('/alterar-senha', methods=['GET', 'POST'])
 @login_required
 def change_password():
@@ -272,7 +236,6 @@ def change_password():
             for msg in form_errors.values(): flash(msg, 'error')
     return render_template('account/change_password.html', form_errors=form_errors, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
 
-# --- ROTA DO DASHBOARD DE PEDIDOS ---
 @app.route('/dashboard-pedidos') 
 @login_required
 def dashboard_pedidos(): 
@@ -294,7 +257,6 @@ def dashboard_pedidos():
                            pagina_anterior_url=url_for('mundo_os'), 
                            pagina_anterior_texto="Mundo de OS")
 
-# --- ROTA PARA DASHBOARD MANUTENÇÃO (FOCO EM OS) ---
 @app.route('/dashboard-manutencao')
 @login_required
 def dashboard_manutencao():
@@ -321,20 +283,35 @@ def dashboard_manutencao():
                            pagina_anterior_url=url_for('mundo_os'),
                            pagina_anterior_texto="Mundo de OS")
 
-# --- ROTA PARA INDICADORES DE DESEMPENHO (ATUALIZADA) ---
 @app.route('/indicadores-desempenho')
 @login_required
 def indicadores_desempenho():
     db_path = app.config['DATABASE']
     data_de_filtro = request.args.get('data_de', None)
     data_ate_filtro = request.args.get('data_ate', None)
+    granularidade_padrao = 'mes' # Default para visualização mensal
+    num_periodos_padrao = 6     # Default para os últimos 6 períodos
 
+    # Validação simples de formato de data (YYYY-MM-DD)
+    # e determinar granularidade
+    data_de_obj, data_ate_obj = None, None
     if data_de_filtro:
-        try: datetime.strptime(data_de_filtro, '%Y-%m-%d')
+        try: data_de_obj = datetime.strptime(data_de_filtro, '%Y-%m-%d')
         except ValueError: flash("Formato de 'Data De' inválido. Use AAAA-MM-DD.", "warning"); data_de_filtro = None
     if data_ate_filtro:
-        try: datetime.strptime(data_ate_filtro, '%Y-%m-%d')
+        try: data_ate_obj = datetime.strptime(data_ate_filtro, '%Y-%m-%d')
         except ValueError: flash("Formato de 'Data Até' inválido. Use AAAA-MM-DD.", "warning"); data_ate_filtro = None
+
+    granularidade_grafico = granularidade_padrao
+    if data_de_obj and data_ate_obj:
+        diferenca_dias = (data_ate_obj - data_de_obj).days
+        if diferenca_dias <= 10:
+            granularidade_grafico = 'dia'
+        elif diferenca_dias <= 90:
+            granularidade_grafico = 'semana'
+        # else: continua mensal (já é o padrão)
+    elif data_de_filtro or data_ate_filtro: # Se apenas uma data for fornecida, pode ser melhor usar mensal ou avisar o utilizador
+        logger.info(f"Apenas uma data de filtro fornecida, usando granularidade mensal para gráficos.")
     
     kpis_data = {
         'taxa_cobranca_efetuada': "N/D",
@@ -350,9 +327,9 @@ def indicadores_desempenho():
         kpis_data['taxa_cobranca_efetuada'] = get_kpi_taxa_cobranca_efetuada(db_path, data_de_filtro, data_ate_filtro)
         kpis_data['percentual_nao_conforme'] = get_kpi_percentual_nao_conforme(db_path, data_de_filtro, data_ate_filtro)
         kpis_data['valor_total_pendencias'] = get_kpi_valor_total_pendencias_ativas(db_path, data_de_filtro, data_ate_filtro)
-        # kpis_data['tempo_medio_resolucao'] = get_kpi_tempo_medio_resolucao_pendencias(db_path, data_de_filtro, data_ate_filtro) # Implementar esta função
+        kpis_data['tempo_medio_resolucao'] = get_kpi_tempo_medio_resolucao_pendencias(db_path, data_de_filtro, data_ate_filtro)
         
-        evolucao_dados = get_evolucao_mensal_cobrancas_pendencias(db_path, data_de_filtro, data_ate_filtro)
+        evolucao_dados = get_evolucao_mensal_cobrancas_pendencias(db_path, data_de_filtro, data_ate_filtro, granularidade=granularidade_grafico)
         if evolucao_dados: 
             chart_data['evolucao_meses'] = evolucao_dados.get('labels', []) 
             chart_data['evolucao_cobrancas'] = evolucao_dados.get('cobrancas_data', [])
@@ -373,8 +350,7 @@ def indicadores_desempenho():
                            pagina_anterior_url=url_for('mundo_os'),
                            pagina_anterior_texto="Mundo de OS")
 
-
-# --- CRUD para Cobranças ---
+# ... (Restante das rotas CRUD, Relatórios, Admin, Exportação, CSRF, main - mantidas como na versão anterior) ...
 @app.route('/cobranca/<int:cobranca_id>/edit', methods=['GET', 'POST'])
 @login_required 
 def edit_cobranca(cobranca_id):
@@ -387,7 +363,6 @@ def edit_cobranca(cobranca_id):
         form_data_repopulate['conformidade'] = form_data_repopulate.get('conformidade','').strip()
         form_data_repopulate['status'] = form_data_repopulate.get('status','').strip()
         form_data_repopulate['data_emissao_pedido'] = request.form.get('data_emissao_pedido', cobranca['data_emissao_pedido'] if cobranca['data_emissao_pedido'] else '').strip()
-
         if not form_data_repopulate['pedido'] or not form_data_repopulate['os']: flash("Pedido e OS são campos obrigatórios.", "error")
         elif form_data_repopulate['status'] not in opcoes_status: flash("Valor inválido para Status.", "error")
         elif form_data_repopulate['conformidade'] not in opcoes_conformidade: flash("Valor inválido para Conformidade.", "error")
@@ -407,7 +382,6 @@ def delete_cobranca_route(cobranca_id):
         else: log_audit("DELETE_COBRANCA_FAILURE", f"Falha ao apagar ID {cobranca_id}."); flash("Erro ao apagar.", "error")
     return redirect(url_for('relatorio_cobrancas'))
 
-# --- CRUD para Pendências ---
 @app.route('/pendencia/<int:pendencia_id>/edit', methods=['GET', 'POST'])
 @login_required 
 def edit_pendencia(pendencia_id):
@@ -421,7 +395,6 @@ def edit_pendencia(pendencia_id):
             form_data_repopulate['data_emissao_fmt_input'] = dt.strftime('%Y-%m-%d')
         except (ValueError, TypeError): form_data_repopulate['data_emissao_fmt_input'] = ''
     else: form_data_repopulate['data_emissao_fmt_input'] = ''
-
     if request.method == 'POST':
         form_data_repopulate = {k: request.form.get(k, '').strip() for k in pendencia.keys() if k != 'id'}
         form_data_repopulate['data_emissao'] = request.form.get('data_emissao_input', '').strip() 
@@ -438,7 +411,6 @@ def edit_pendencia(pendencia_id):
             except ValueError: flash("Valor da pendência inválido.", "error")
         form_data_repopulate['data_emissao_fmt_input'] = form_data_repopulate.get('data_emissao', '')
         return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id, pagina_anterior_url=url_for('relatorio_pendentes'), pagina_anterior_texto="Relatório de Pendências")
-    
     return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id, pagina_anterior_url=url_for('relatorio_pendentes'), pagina_anterior_texto="Relatório de Pendências")
 @app.route('/pendencia/<int:pendencia_id>/delete', methods=['POST'])
 @login_required 
@@ -450,7 +422,6 @@ def delete_pendencia_route(pendencia_id):
         else: log_audit("DELETE_PENDENCIA_FAILURE", f"Falha ao apagar ID {pendencia_id}."); flash("Erro ao apagar pendência.", "error")
     return redirect(url_for('relatorio_pendentes'))
 
-# --- Relatórios ---
 @app.route('/relatorio-cobrancas')
 @login_required
 def relatorio_cobrancas():
@@ -474,7 +445,6 @@ def relatorio_pendentes():
         return render_template('relatorio_pendentes.html', pendentes=pendentes, filtros=filtros_form, distinct_status_pend=distinct_status_pend, distinct_fornecedores_pend=distinct_fornecedores_pend, distinct_filiais_pend=distinct_filiais_pend, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
     except Exception as e: logger.error(f"Erro relatório pendências: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_pendentes.html', pendentes=[], filtros=filtros_form, distinct_status_pend=[], distinct_fornecedores_pend=[], distinct_filiais_pend=[], pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
 
-# --- Rota de Visualização do Log de Auditoria (Admin) ---
 @app.route('/admin/audit_log')
 @admin_required
 def view_audit_log():
@@ -507,7 +477,6 @@ def view_audit_log():
     except Exception as e: logger.error(f"Erro ao buscar logs: {e}"); flash("Erro ao buscar logs.", "error")
     return render_template('admin/view_audit_log.html', logs=logs_processed, current_page=page, total_pages=total_pages, filters=filters_form, total_logs=total_logs, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
 
-# --- ROTA DE IMPRESSÃO PARA VISUALIZAÇÃO HTML (mantida) ---
 @app.route('/relatorio-pendentes/imprimir_visualizacao')
 @login_required
 def imprimir_visualizacao_pendentes():
@@ -528,7 +497,6 @@ def imprimir_visualizacao_pendentes():
         flash("Erro ao gerar visualização para impressão. Verifique os logs.","error")
         return redirect(url_for('relatorio_pendentes',**filtros_form))
 
-# --- ROTA PARA EXPORTAR COBRANÇAS PARA EXCEL (mantida) ---
 @app.route('/relatorio-cobrancas/exportar_excel')
 @login_required
 def exportar_excel_cobrancas():

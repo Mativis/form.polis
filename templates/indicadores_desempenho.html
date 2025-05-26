@@ -41,62 +41,39 @@
 <div class="dashboard-section">
     <h3 class="dashboard-section-title">Visão Geral dos Indicadores Chave (KPIs)</h3>
     <div class="kpi-grid">
-        {# KPI 1: Taxa de Cobranças Efetuadas #}
         <div class="kpi-card">
-            <div class="kpi-icon-container">
-                <i class="fas fa-percent fa-2x"></i>
-            </div>
+            <div class="kpi-icon-container"><i class="fas fa-percent fa-2x"></i></div>
             <h4 class="kpi-title">Taxa de Cobranças Efetuadas</h4>
             <p class="kpi-value">{{ kpis.taxa_cobranca_efetuada | default('N/D') }}%</p>
             <p class="kpi-description">Percentagem de pedidos com status "Com cobrança" sobre o total de pedidos registados no período.</p>
         </div>
-
-        {# KPI 2: Percentual de Não Conformidade (Verificar) #}
         <div class="kpi-card">
-            <div class="kpi-icon-container">
-                <i class="fas fa-exclamation-triangle fa-2x"></i>
-            </div>
+            <div class="kpi-icon-container"><i class="fas fa-exclamation-triangle fa-2x"></i></div>
             <h4 class="kpi-title">Percentual para Verificar (Conformidade)</h4>
             <p class="kpi-value">{{ kpis.percentual_nao_conforme | default('N/D') }}%</p>
             <p class="kpi-description">Percentagem de pedidos com conformidade "Verificar" sobre o total de pedidos registados no período.</p>
         </div>
-
-        {# KPI 3: Tempo Médio de Resolução (Pendentes) - DESCRIÇÃO ATUALIZADA #}
         <div class="kpi-card">
-            <div class="kpi-icon-container">
-                <i class="fas fa-hourglass-half fa-2x"></i>
-            </div>
+            <div class="kpi-icon-container"><i class="fas fa-hourglass-half fa-2x"></i></div>
             <h4 class="kpi-title">Tempo Médio de Resolução (Pendentes)</h4>
             <p class="kpi-value">{{ kpis.tempo_medio_resolucao if kpis.tempo_medio_resolucao != 'N/D' else 'N/D' }} {% if kpis.tempo_medio_resolucao != 'N/D' and kpis.tempo_medio_resolucao is not none %}dias{% endif %}</p>
             <p class="kpi-description">Tempo médio para finalizar pendências com datas de emissão e finalização válidas no período selecionado.</p> {# DESCRIÇÃO ATUALIZADA #}
         </div>
-        
-        {# KPI 4: Valor Total de Pendências Ativas #}
         <div class="kpi-card">
-            <div class="kpi-icon-container">
-                <i class="fas fa-dollar-sign fa-2x"></i>
-            </div>
+            <div class="kpi-icon-container"><i class="fas fa-dollar-sign fa-2x"></i></div>
             <h4 class="kpi-title">Valor Total de Pendências Ativas</h4>
             <p class="kpi-value">{{ kpis.valor_total_pendencias | format_currency | default('N/D') }}</p>
             <p class="kpi-description">Soma dos valores de todas as pendências com status "Pendente" no período.</p>
             <a href="{{ url_for('relatorio_pendentes', filtro_status_pend='Pendente') }}" class="kpi-link">Ver pendências ativas <i class="fas fa-angle-right fa-xs"></i></a>
         </div>
-
-        {# KPI Placeholder 1 #}
         <div class="kpi-card placeholder">
-            <div class="kpi-icon-container">
-                <i class="fas fa-tasks fa-2x"></i>
-            </div>
+            <div class="kpi-icon-container"><i class="fas fa-tasks fa-2x"></i></div>
             <h4 class="kpi-title">Pedidos por Status</h4>
             <p class="kpi-value">Em Breve</p>
             <p class="kpi-description">Distribuição de pedidos pelos diferentes status de cobrança.</p>
         </div>
-
-        {# KPI Placeholder 2 #}
         <div class="kpi-card placeholder">
-            <div class="kpi-icon-container">
-                <i class="fas fa-calendar-check fa-2x"></i>
-            </div>
+            <div class="kpi-icon-container"><i class="fas fa-calendar-check fa-2x"></i></div>
             <h4 class="kpi-title">Pendências por Prazo</h4>
             <p class="kpi-value">Em Breve</p>
             <p class="kpi-description">Análise de pendências por data de vencimento ou criação.</p>
@@ -104,7 +81,7 @@
     </div>
 </div>
 
-{# Secção para Gráficos #}
+{# Secção para Gráficos (mantida) #}
 <div class="dashboard-section">
     <h3 class="dashboard-section-title">Visualizações Gráficas</h3>
     <div class="row">
@@ -137,53 +114,14 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <style>
     .dashboard-section { margin-bottom: 2.5rem; }
-    .dashboard-section-title { 
-        font-size: 1.5rem; 
-        color: var(--text-color); 
-        margin-bottom: 1.5rem; 
-        padding-bottom: 0.5rem; 
-        border-bottom: 2px solid var(--accent-color-light); 
-    }
-    .kpi-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 2rem;
-    }
-    .kpi-card {
-        background-color: var(--card-bg);
-        border: 1px solid var(--card-border-color);
-        border-radius: var(--border-radius-base);
-        padding: 1.5rem;
-        text-align: center;
-        box-shadow: var(--box-shadow-sm);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
-    }
-    .kpi-card:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--card-hover-box-shadow);
-    }
+    .dashboard-section-title { font-size: 1.5rem; color: var(--text-color); margin-bottom: 1.5rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--accent-color-light); }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+    .kpi-card { background-color: var(--card-bg); border: 1px solid var(--card-border-color); border-radius: var(--border-radius-base); padding: 1.5rem; text-align: center; box-shadow: var(--box-shadow-sm); display: flex; flex-direction: column; align-items: center; transition: transform 0.2s ease-out, box-shadow 0.2s ease-out; }
+    .kpi-card:hover { transform: translateY(-4px); box-shadow: var(--card-hover-box-shadow); }
     .kpi-card.placeholder { opacity: 0.7; border-style: dashed; }
-    .kpi-icon-container {
-        color: var(--accent-color);
-        margin-bottom: 1rem;
-        background-color: var(--accent-color-light);
-        border-radius: 50%;
-        width: 60px;
-        height: 60px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    html[data-theme="noite"] .kpi-icon-container {
-        background-color: var(--accent-color); 
-    }
-    html[data-theme="noite"] .kpi-icon-container i {
-        color: var(--card-bg); 
-    }
+    .kpi-icon-container { color: var(--accent-color); margin-bottom: 1rem; background-color: var(--accent-color-light); border-radius: 50%; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; }
+    html[data-theme="noite"] .kpi-icon-container { background-color: var(--accent-color); }
+    html[data-theme="noite"] .kpi-icon-container i { color: var(--card-bg); }
     .kpi-icon-container .fas, .kpi-icon-container .fab { font-size: 1.8rem; }
     .kpi-title { font-size: 1.1rem; color: var(--text-color); margin-bottom: 0.5rem; font-weight: 600; min-height: 2.2em; }
     .kpi-value { font-size: 2rem; font-weight: 700; color: var(--accent-color); line-height: 1.1; margin-bottom: 0.5rem; }
