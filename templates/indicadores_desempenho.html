@@ -14,66 +14,68 @@
     <p class="text-muted mb-4">Acompanhe as métricas mais importantes para a gestão de cobranças e pendências.</p>
 
     <div class="kpi-grid">
-        {# KPI 1 #}
+        {# KPI 1: Taxa de Cobranças Efetuadas #}
         <div class="kpi-card">
             <div class="kpi-icon-container">
                 <i class="fas fa-percent fa-2x"></i>
             </div>
             <h4 class="kpi-title">Taxa de Cobranças Efetuadas</h4>
-            {# CORRIGIDO: Acesso via kpis.chave #}
             <p class="kpi-value">{{ kpis.taxa_cobranca_efetuada | default('N/D') }}%</p>
-            <p class="kpi-description">Percentagem de pedidos com cobrança lançada sobre o total de pedidos registados.</p>
+            <p class="kpi-description">Percentagem de pedidos com status "Com cobrança" sobre o total de pedidos registados.</p>
+            {# <a href="{{ url_for('relatorio_cobrancas', filtro_status='Com cobrança') }}" class="kpi-link">Ver detalhes</a> #}
         </div>
 
-        {# KPI 2 #}
+        {# KPI 2: Percentual de Não Conformidade (Verificar) #}
         <div class="kpi-card">
             <div class="kpi-icon-container">
                 <i class="fas fa-exclamation-triangle fa-2x"></i>
             </div>
-            <h4 class="kpi-title">Percentual de Não Conformidade</h4>
-            {# CORRIGIDO: Acesso via kpis.chave #}
+            <h4 class="kpi-title">Percentual para Verificar (Conformidade)</h4>
             <p class="kpi-value">{{ kpis.percentual_nao_conforme | default('N/D') }}%</p>
             <p class="kpi-description">Percentagem de pedidos com conformidade "Verificar" sobre o total de pedidos registados.</p>
+            {# <a href="{{ url_for('relatorio_cobrancas', filtro_conformidade='Verificar') }}" class="kpi-link">Ver detalhes</a> #}
         </div>
 
-        {# KPI 3 #}
+        {# KPI 3: Tempo Médio de Resolução (Pendentes) - Placeholder #}
         <div class="kpi-card">
             <div class="kpi-icon-container">
                 <i class="fas fa-hourglass-half fa-2x"></i>
             </div>
             <h4 class="kpi-title">Tempo Médio de Resolução (Pendentes)</h4>
-            {# CORRIGIDO: Acesso via kpis.chave #}
-            <p class="kpi-value">{{ kpis.tempo_medio_resolucao | default('N/D') }}</p> {# Removido 'dias' para manter flexível #}
-            <p class="kpi-description">Tempo médio para finalizar pendências (a ser implementado).</p>
+            <p class="kpi-value">{{ kpis.tempo_medio_resolucao | default('N/D') }}</p>
+            <p class="kpi-description">Tempo médio para finalizar pendências (cálculo a ser implementado).</p>
+            {# <a href="#" class="kpi-link">Ver detalhes</a> #}
         </div>
         
-        {# KPI 4 #}
+        {# KPI 4: Valor Total de Pendências Ativas #}
         <div class="kpi-card">
             <div class="kpi-icon-container">
                 <i class="fas fa-dollar-sign fa-2x"></i>
             </div>
             <h4 class="kpi-title">Valor Total de Pendências Ativas</h4>
-            {# CORRIGIDO: Acesso via kpis.chave #}
             <p class="kpi-value">{{ kpis.valor_total_pendencias | format_currency | default('N/D') }}</p>
             <p class="kpi-description">Soma dos valores de todas as pendências com status "Pendente".</p>
+            <a href="{{ url_for('relatorio_pendentes', filtro_status_pend='Pendente') }}" class="kpi-link">Ver pendências ativas <i class="fas fa-angle-right fa-xs"></i></a>
         </div>
 
-        {# Placeholder para mais KPIs #}
+        {# KPI Placeholder 1 #}
         <div class="kpi-card placeholder">
             <div class="kpi-icon-container">
-                <i class="fas fa-chart-pie fa-2x"></i>
+                <i class="fas fa-tasks fa-2x"></i>
             </div>
-            <h4 class="kpi-title">Outro Indicador Importante</h4>
+            <h4 class="kpi-title">Pedidos por Status</h4>
             <p class="kpi-value">Em Breve</p>
-            <p class="kpi-description">Descrição do futuro indicador.</p>
+            <p class="kpi-description">Distribuição de pedidos pelos diferentes status de cobrança.</p>
         </div>
+
+        {# KPI Placeholder 2 #}
         <div class="kpi-card placeholder">
             <div class="kpi-icon-container">
-                <i class="fas fa-cogs fa-2x"></i>
+                <i class="fas fa-calendar-check fa-2x"></i>
             </div>
-            <h4 class="kpi-title">Métrica de Eficiência</h4>
+            <h4 class="kpi-title">Pendências por Prazo</h4>
             <p class="kpi-value">Em Breve</p>
-            <p class="kpi-description">Detalhes sobre a métrica de eficiência operacional.</p>
+            <p class="kpi-description">Análise de pendências por data de vencimento ou criação.</p>
         </div>
     </div>
 </div>
@@ -96,7 +98,7 @@
         <div class="col-md-6 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h4>Distribuição de Status</h4>
+                    <h4>Distribuição de Status de Cobrança</h4>
                 </div>
                 <div class="card-body text-center">
                     <i class="fas fa-chart-pie fa-4x text-muted my-3"></i>
@@ -106,6 +108,7 @@
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block head_extra %}
@@ -166,6 +169,7 @@
     .kpi-description { font-size: 0.85rem; color: var(--text-muted-color); margin-bottom: 1rem; flex-grow: 1; min-height: 3em; }
     .kpi-link { font-size: 0.8rem; color: var(--link-color); text-decoration: none; font-weight: 500; margin-top: auto; }
     .kpi-link:hover { color: var(--link-hover-color); text-decoration: underline; }
+    .kpi-link .fa-xs { font-size: 0.8em; } /* Para o ícone de seta no link */
     .row { display: flex; flex-wrap: wrap; margin-right: -15px; margin-left: -15px; }
     .col-md-6 { position: relative; width: 100%; padding-right: 15px; padding-left: 15px; }
     @media (min-width: 768px) { .col-md-6 { flex: 0 0 50%; max-width: 50%; } }

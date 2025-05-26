@@ -99,7 +99,6 @@ def categorizar_conformidade(conformidade_original):
     if conformidade_lower: logger.warning(f"Conformidade '{conformidade_original}' não categorizada, assumindo 'Verificar'."); return "Verificar"
     return "Verificar"
 
-# --- Funções de Processamento de Excel/CSV (mantidas) ---
 def processar_excel_cobrancas(file_path, file_extension, db_name):
     # ... (código mantido como na versão anterior - ID: excel_processor_py_data_emissao_cruzamento) ...
     logger.info(f"Processando cobranças: {file_path} para DB: {db_name}")
@@ -213,15 +212,11 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
         if conn: conn.close()
     return False, "Erro desconhecido no processamento de pendências."
 
-# --- Funções de Leitura de Dados ---
+# --- Funções de Leitura de Dados (mantidas) ---
 def get_cobrancas(filtros=None, db_name='polis_database.db'):
+    # ... (código mantido como na versão anterior - ID: excel_processor_py_data_emissao_cruzamento) ...
     conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-    query = """
-        SELECT id, pedido, os, filial, placa, transportadora, conformidade, status, data_emissao_pedido,
-               strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt,
-               strftime('%d/%m/%Y', data_emissao_pedido) as data_emissao_pedido_fmt 
-        FROM cobrancas
-    """
+    query = "SELECT id, pedido, os, filial, placa, transportadora, conformidade, status, data_emissao_pedido, strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt, strftime('%d/%m/%Y', data_emissao_pedido) as data_emissao_pedido_fmt FROM cobrancas"
     conditions, params = [], []
     if filtros:
         for key, val in filtros.items():
@@ -242,6 +237,7 @@ def get_cobrancas(filtros=None, db_name='polis_database.db'):
         if conn: conn.close()
 
 def get_pendentes(filtros=None, db_name='polis_database.db'):
+    # ... (código mantido como na versão anterior - ID: excel_processor_py_data_emissao_cruzamento) ...
     conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
     query = "SELECT id, pedido_ref, fornecedor, filial, valor, status, data_emissao, strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt FROM pendentes"
     conditions, params = [], []
@@ -264,6 +260,7 @@ def get_pendentes(filtros=None, db_name='polis_database.db'):
         if conn: conn.close()
 
 def get_distinct_values(column_name, table_name, db_name='polis_database.db'):
+    # ... (código mantido)
     conn = sqlite3.connect(db_name); cursor = conn.cursor()
     try:
         query = f"SELECT DISTINCT TRIM({column_name}) FROM {table_name} WHERE {column_name} IS NOT NULL AND TRIM({column_name}) != '' ORDER BY TRIM({column_name}) ASC"
@@ -274,6 +271,7 @@ def get_distinct_values(column_name, table_name, db_name='polis_database.db'):
 
 # --- Funções para Dashboard (Pedidos) ---
 def get_count_pedidos_status_especifico(status_desejado, db_name='polis_database.db'):
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
@@ -284,7 +282,8 @@ def get_count_pedidos_status_especifico(status_desejado, db_name='polis_database
     finally:
         if conn: conn.close()
 
-def get_placas_status_especifico(status_desejado, db_name='polis_database.db'): # Focado em Pedidos
+def get_placas_status_especifico(status_desejado, db_name='polis_database.db'): 
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
@@ -298,6 +297,7 @@ def get_count_total_pedidos_lancados(db_name='polis_database.db'):
     return get_count_pedidos_status_especifico("Com cobrança", db_name)
 
 def get_count_pedidos_nao_conforme(db_name='polis_database.db'):
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
@@ -309,6 +309,7 @@ def get_count_pedidos_nao_conforme(db_name='polis_database.db'):
         if conn: conn.close()
 
 def get_pedidos_status_por_filial(status_desejado, db_name='polis_database.db'):
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
@@ -320,6 +321,7 @@ def get_pedidos_status_por_filial(status_desejado, db_name='polis_database.db'):
 
 # --- Funções para Dashboard Manutenção (OS) ---
 def get_count_os_status_especifico(status_desejado, db_name='polis_database.db'):
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
@@ -334,6 +336,7 @@ def get_count_total_os_lancadas(db_name='polis_database.db'):
     return get_count_os_status_especifico("Com cobrança", db_name)
 
 def get_count_os_para_verificar(db_name='polis_database.db'):
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
@@ -345,6 +348,7 @@ def get_count_os_para_verificar(db_name='polis_database.db'):
         if conn: conn.close()
 
 def get_os_status_por_filial(status_desejado, db_name='polis_database.db'):
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
@@ -355,6 +359,7 @@ def get_os_status_por_filial(status_desejado, db_name='polis_database.db'):
         if conn: conn.close()
 
 def get_os_com_status_especifico(status_desejado, db_name='polis_database.db'):
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
@@ -366,28 +371,18 @@ def get_os_com_status_especifico(status_desejado, db_name='polis_database.db'):
 
 # --- NOVAS FUNÇÕES PARA KPIs ---
 def get_kpi_taxa_cobranca_efetuada(db_name='polis_database.db'):
-    total_pedidos = get_count_total_pedidos_lancados(db_name) # Usa a lógica de "Com cobrança"
-    if total_pedidos == 0: return 0.0 # Evita divisão por zero
-    
-    # "Com cobrança" já é o total de pedidos lançados pela definição atual
-    # Se "Total de Pedidos Lançados" significar *todos* os pedidos na tabela cobrancas,
-    # precisaremos de uma nova função para contar todos os pedidos distintos em cobrancas.
-    # Assumindo que "Total de Pedidos Lançados" = "Pedidos com status 'Com cobrança'"
-    pedidos_com_cobranca = get_count_pedidos_status_especifico("Com cobrança", db_name)
-    
-    # Se quisermos a taxa de pedidos com cobrança sobre TODOS os pedidos que já passaram pelo sistema (independente do status atual)
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
         cursor.execute("SELECT COUNT(DISTINCT pedido) FROM cobrancas"); 
         total_pedidos_registados = cursor.fetchone()[0] or 0
         if total_pedidos_registados == 0: return 0.0
+        pedidos_com_cobranca = get_count_pedidos_status_especifico("Com cobrança", db_name)
         taxa = (pedidos_com_cobranca / total_pedidos_registados) * 100
         return round(taxa, 2)
     except sqlite3.Error as e: logger.error(f"Erro SQL KPI taxa cobrança: {e}"); return 0.0
     finally:
         if conn: conn.close()
-
 
 def get_kpi_percentual_nao_conforme(db_name='polis_database.db'):
     conn = None
@@ -396,20 +391,17 @@ def get_kpi_percentual_nao_conforme(db_name='polis_database.db'):
         cursor.execute("SELECT COUNT(DISTINCT pedido) FROM cobrancas"); 
         total_pedidos_registados = cursor.fetchone()[0] or 0
         if total_pedidos_registados == 0: return 0.0
-        
-        pedidos_nao_conforme = get_count_pedidos_nao_conforme(db_name) # Usa conformidade 'Verificar'
+        pedidos_nao_conforme = get_count_pedidos_nao_conforme(db_name)
         taxa = (pedidos_nao_conforme / total_pedidos_registados) * 100
         return round(taxa, 2)
     except sqlite3.Error as e: logger.error(f"Erro SQL KPI não conforme: {e}"); return 0.0
     finally:
         if conn: conn.close()
 
-
 def get_kpi_valor_total_pendencias_ativas(db_name='polis_database.db'):
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        # Assumindo que 'Pendente' é o status para pendências ativas
         cursor.execute("SELECT SUM(valor) FROM pendentes WHERE LOWER(TRIM(status)) = LOWER(?)", ('pendente',))
         total_valor = cursor.fetchone()[0]
         return total_valor if total_valor is not None else 0.0
@@ -417,8 +409,9 @@ def get_kpi_valor_total_pendencias_ativas(db_name='polis_database.db'):
     finally:
         if conn: conn.close()
 
-# --- CRUD para Cobranças ---
+# --- CRUD para Cobranças (mantido) ---
 def get_cobranca_by_id(cobranca_id, db_name):
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
@@ -428,6 +421,7 @@ def get_cobranca_by_id(cobranca_id, db_name):
         if conn: conn.close()
 
 def update_cobranca_db(cobranca_id, data, db_name):
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
@@ -447,6 +441,7 @@ def update_cobranca_db(cobranca_id, data, db_name):
         if conn: conn.close()
 
 def delete_cobranca_db(cobranca_id, db_name):
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
@@ -456,8 +451,9 @@ def delete_cobranca_db(cobranca_id, db_name):
     finally:
         if conn: conn.close()
 
-# --- CRUD para Pendências ---
+# --- CRUD para Pendências (mantido) ---
 def get_pendencia_by_id(pendencia_id, db_name):
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
@@ -467,6 +463,7 @@ def get_pendencia_by_id(pendencia_id, db_name):
         if conn: conn.close()
 
 def update_pendencia_db(pendencia_id, data, db_name):
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
@@ -486,6 +483,7 @@ def update_pendencia_db(pendencia_id, data, db_name):
         if conn: conn.close()
 
 def delete_pendencia_db(pendencia_id, db_name):
+    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
@@ -494,4 +492,3 @@ def delete_pendencia_db(pendencia_id, db_name):
     except sqlite3.Error as e: logger.error(f"Erro SQL apagar pendência ID {pendencia_id}: {e}"); conn.rollback(); return False
     finally:
         if conn: conn.close()
-
