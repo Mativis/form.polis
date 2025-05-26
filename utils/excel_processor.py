@@ -3,7 +3,7 @@ import pandas as pd
 import sqlite3
 import re
 import pytz
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 # Configuração do logging
@@ -72,7 +72,14 @@ def format_date_for_db(date_string_or_dt):
     if dt_obj:
         sao_paulo_tz = pytz.timezone('America/Sao_Paulo')
         if dt_obj.tzinfo is None or dt_obj.tzinfo.utcoffset(dt_obj) is None: dt_obj = sao_paulo_tz.localize(dt_obj)
-        return dt_obj.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
+        return dt_obj.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S') # Armazena como UTC
+    return None
+
+
+def format_date_for_query(date_string_or_dt): 
+    formatted_date = format_date_for_db(date_string_or_dt) 
+    if formatted_date:
+        return formatted_date.split(' ')[0] 
     return None
 
 def categorizar_status_cobranca(status_original):
@@ -100,7 +107,6 @@ def categorizar_conformidade(conformidade_original):
     return "Verificar"
 
 def processar_excel_cobrancas(file_path, file_extension, db_name):
-    # ... (código mantido como na versão anterior - ID: excel_processor_py_data_emissao_cruzamento) ...
     logger.info(f"Processando cobranças: {file_path} para DB: {db_name}")
     conn = None
     try:
@@ -149,7 +155,6 @@ def processar_excel_cobrancas(file_path, file_extension, db_name):
     return False, "Erro desconhecido no processamento de cobranças."
 
 def processar_excel_pendentes(file_path, file_extension, db_name):
-    # ... (código mantido como na versão anterior - ID: excel_processor_py_data_emissao_cruzamento) ...
     logger.info(f"Processando pendências: {file_path} para DB: {db_name}")
     conn = None
     try:
@@ -212,9 +217,8 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
         if conn: conn.close()
     return False, "Erro desconhecido no processamento de pendências."
 
-# --- Funções de Leitura de Dados (mantidas) ---
+# --- Funções de Leitura de Dados ---
 def get_cobrancas(filtros=None, db_name='polis_database.db'):
-    # ... (código mantido como na versão anterior - ID: excel_processor_py_data_emissao_cruzamento) ...
     conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
     query = "SELECT id, pedido, os, filial, placa, transportadora, conformidade, status, data_emissao_pedido, strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt, strftime('%d/%m/%Y', data_emissao_pedido) as data_emissao_pedido_fmt FROM cobrancas"
     conditions, params = [], []
@@ -224,11 +228,11 @@ def get_cobrancas(filtros=None, db_name='polis_database.db'):
                 if key in ['pedido', 'os', 'placa', 'filial', 'transportadora']: conditions.append(f"LOWER({key}) LIKE LOWER(?)"); params.append(f"%{val}%")
                 elif key in ['status', 'conformidade']: conditions.append(f"LOWER({key}) = LOWER(?)"); params.append(val)
                 elif key == 'data_emissao_de':
-                    dt_db = format_date_for_db(val)
-                    if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao_pedido) >= ?"); params.append(dt_db.split(' ')[0])
+                    dt_db = format_date_for_query(val) # Usa a nova função para obter YYYY-MM-DD
+                    if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao_pedido) >= ?"); params.append(dt_db)
                 elif key == 'data_emissao_ate':
-                    dt_db = format_date_for_db(val)
-                    if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao_pedido) <= ?"); params.append(dt_db.split(' ')[0])
+                    dt_db = format_date_for_query(val)
+                    if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao_pedido) <= ?"); params.append(dt_db)
     if conditions: query += " WHERE " + " AND ".join(conditions)
     query += " ORDER BY CASE WHEN data_emissao_pedido IS NULL THEN 1 ELSE 0 END, data_emissao_pedido DESC, id DESC" 
     try: cursor.execute(query, tuple(params)); return cursor.fetchall()
@@ -237,7 +241,6 @@ def get_cobrancas(filtros=None, db_name='polis_database.db'):
         if conn: conn.close()
 
 def get_pendentes(filtros=None, db_name='polis_database.db'):
-    # ... (código mantido como na versão anterior - ID: excel_processor_py_data_emissao_cruzamento) ...
     conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
     query = "SELECT id, pedido_ref, fornecedor, filial, valor, status, data_emissao, strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt FROM pendentes"
     conditions, params = [], []
@@ -260,7 +263,6 @@ def get_pendentes(filtros=None, db_name='polis_database.db'):
         if conn: conn.close()
 
 def get_distinct_values(column_name, table_name, db_name='polis_database.db'):
-    # ... (código mantido)
     conn = sqlite3.connect(db_name); cursor = conn.cursor()
     try:
         query = f"SELECT DISTINCT TRIM({column_name}) FROM {table_name} WHERE {column_name} IS NOT NULL AND TRIM({column_name}) != '' ORDER BY TRIM({column_name}) ASC"
@@ -269,149 +271,258 @@ def get_distinct_values(column_name, table_name, db_name='polis_database.db'):
     finally:
         if conn: conn.close()
 
-# --- Funções para Dashboard (Pedidos) ---
-def get_count_pedidos_status_especifico(status_desejado, db_name='polis_database.db'):
-    # ... (código mantido)
-    conn = None
+def _build_date_filter_sql(date_column, data_de, data_ate):
+    conditions = []
+    params = []
+    if data_de:
+        dt_de_str = format_date_for_query(data_de) # Converte para YYYY-MM-DD
+        if dt_de_str: conditions.append(f"STRFTIME('%Y-%m-%d', {date_column}) >= ?"); params.append(dt_de_str)
+    if data_ate:
+        dt_ate_str = format_date_for_query(data_ate)
+        if dt_ate_str: conditions.append(f"STRFTIME('%Y-%m-%d', {date_column}) <= ?"); params.append(dt_ate_str)
+    return " AND ".join(conditions), params
+
+def get_count_pedidos_status_especifico(status_desejado, db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, date_params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        query = "SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE LOWER(status) = LOWER(?)"
-        cursor.execute(query, (status_desejado.lower(),)); count = cursor.fetchone()[0]
+        query = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE LOWER(status) = LOWER(?) {date_filter_sql}"
+        cursor.execute(query, (status_desejado.lower(), *date_params)); count = cursor.fetchone()[0]
         return count if count is not None else 0
     except sqlite3.Error as e: logger.error(f"Erro SQL contar pedidos status '{status_desejado}': {e}"); return 0
     finally:
         if conn: conn.close()
 
-def get_placas_status_especifico(status_desejado, db_name='polis_database.db'): 
-    # ... (código mantido)
-    conn = None
+def get_placas_status_especifico(status_desejado, db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, date_params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        query = "SELECT DISTINCT placa FROM cobrancas WHERE LOWER(status) = LOWER(?) AND placa IS NOT NULL AND TRIM(placa) != '' ORDER BY placa ASC"
-        cursor.execute(query, (status_desejado.lower(),)); return [row['placa'] for row in cursor.fetchall()]
+        query = f"SELECT DISTINCT placa FROM cobrancas WHERE LOWER(status) = LOWER(?) AND placa IS NOT NULL AND TRIM(placa) != '' {date_filter_sql} ORDER BY placa ASC"
+        cursor.execute(query, (status_desejado.lower(), *date_params)); return [row['placa'] for row in cursor.fetchall()]
     except sqlite3.Error as e: logger.error(f"Erro SQL buscar placas status '{status_desejado}': {e}"); return []
     finally:
         if conn: conn.close()
 
-def get_count_total_pedidos_lancados(db_name='polis_database.db'):
-    return get_count_pedidos_status_especifico("Com cobrança", db_name)
+def get_count_total_pedidos_lancados(db_name, data_de=None, data_ate=None):
+    return get_count_pedidos_status_especifico("Com cobrança", db_name, data_de, data_ate)
 
-def get_count_pedidos_nao_conforme(db_name='polis_database.db'):
-    # ... (código mantido)
-    conn = None
+def get_count_pedidos_nao_conforme(db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, date_params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        query = "SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE LOWER(TRIM(conformidade)) = LOWER(?)"
-        cursor.execute(query, ('verificar',)); count = cursor.fetchone()[0]
+        query = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE LOWER(TRIM(conformidade)) = LOWER(?) {date_filter_sql}"
+        cursor.execute(query, ('verificar', *date_params)); count = cursor.fetchone()[0]
         return count if count is not None else 0
     except sqlite3.Error as e: logger.error(f"Erro SQL contar pedidos não conforme: {e}"); return 0
     finally:
         if conn: conn.close()
 
-def get_pedidos_status_por_filial(status_desejado, db_name='polis_database.db'):
-    # ... (código mantido)
-    conn = None
+def get_pedidos_status_por_filial(status_desejado, db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, date_params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        query = "SELECT filial, COUNT(DISTINCT pedido) as count_pedidos FROM cobrancas WHERE LOWER(status) = LOWER(?) AND filial IS NOT NULL AND TRIM(filial) != '' GROUP BY filial ORDER BY count_pedidos DESC, filial ASC"
-        cursor.execute(query, (status_desejado.lower(),)); return cursor.fetchall()
+        query = f"SELECT filial, COUNT(DISTINCT pedido) as count_pedidos FROM cobrancas WHERE LOWER(status) = LOWER(?) AND filial IS NOT NULL AND TRIM(filial) != '' {date_filter_sql} GROUP BY filial ORDER BY count_pedidos DESC, filial ASC"
+        cursor.execute(query, (status_desejado.lower(), *date_params)); return cursor.fetchall()
     except sqlite3.Error as e: logger.error(f"Erro SQL status por filial '{status_desejado}': {e}"); return []
     finally:
         if conn: conn.close()
 
-# --- Funções para Dashboard Manutenção (OS) ---
-def get_count_os_status_especifico(status_desejado, db_name='polis_database.db'):
-    # ... (código mantido)
-    conn = None
+def get_count_os_status_especifico(status_desejado, db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, date_params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        query = "SELECT COUNT(DISTINCT os) FROM cobrancas WHERE LOWER(status) = LOWER(?)"
-        cursor.execute(query, (status_desejado.lower(),)); count = cursor.fetchone()[0]
+        query = f"SELECT COUNT(DISTINCT os) FROM cobrancas WHERE LOWER(status) = LOWER(?) {date_filter_sql}"
+        cursor.execute(query, (status_desejado.lower(), *date_params)); count = cursor.fetchone()[0]
         return count if count is not None else 0
     except sqlite3.Error as e: logger.error(f"Erro SQL contar OS status '{status_desejado}': {e}"); return 0
     finally:
         if conn: conn.close()
 
-def get_count_total_os_lancadas(db_name='polis_database.db'):
-    return get_count_os_status_especifico("Com cobrança", db_name)
+def get_count_total_os_lancadas(db_name, data_de=None, data_ate=None):
+    return get_count_os_status_especifico("Com cobrança", db_name, data_de, data_ate)
 
-def get_count_os_para_verificar(db_name='polis_database.db'):
-    # ... (código mantido)
-    conn = None
+def get_count_os_para_verificar(db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, date_params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        query = "SELECT COUNT(DISTINCT os) FROM cobrancas WHERE LOWER(TRIM(conformidade)) = LOWER(?)"
-        cursor.execute(query, ('verificar',)); count = cursor.fetchone()[0]
+        query = f"SELECT COUNT(DISTINCT os) FROM cobrancas WHERE LOWER(TRIM(conformidade)) = LOWER(?) {date_filter_sql}"
+        cursor.execute(query, ('verificar', *date_params)); count = cursor.fetchone()[0]
         return count if count is not None else 0
     except sqlite3.Error as e: logger.error(f"Erro SQL contar OS para verificar: {e}"); return 0
     finally:
         if conn: conn.close()
 
-def get_os_status_por_filial(status_desejado, db_name='polis_database.db'):
-    # ... (código mantido)
-    conn = None
+def get_os_status_por_filial(status_desejado, db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, date_params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        query = "SELECT filial, COUNT(DISTINCT os) as count_os FROM cobrancas WHERE LOWER(status) = LOWER(?) AND filial IS NOT NULL AND TRIM(filial) != '' GROUP BY filial ORDER BY count_os DESC, filial ASC"
-        cursor.execute(query, (status_desejado.lower(),)); return cursor.fetchall()
+        query = f"SELECT filial, COUNT(DISTINCT os) as count_os FROM cobrancas WHERE LOWER(status) = LOWER(?) AND filial IS NOT NULL AND TRIM(filial) != '' {date_filter_sql} GROUP BY filial ORDER BY count_os DESC, filial ASC"
+        cursor.execute(query, (status_desejado.lower(), *date_params)); return cursor.fetchall()
     except sqlite3.Error as e: logger.error(f"Erro SQL OS status por filial '{status_desejado}': {e}"); return []
     finally:
         if conn: conn.close()
 
-def get_os_com_status_especifico(status_desejado, db_name='polis_database.db'):
-    # ... (código mantido)
-    conn = None
+def get_os_com_status_especifico(status_desejado, db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, date_params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        query = "SELECT DISTINCT os FROM cobrancas WHERE LOWER(status) = LOWER(?) AND os IS NOT NULL AND TRIM(os) != '' ORDER BY os ASC"
-        cursor.execute(query, (status_desejado.lower(),)); return cursor.fetchall() 
+        query = f"SELECT DISTINCT os FROM cobrancas WHERE LOWER(status) = LOWER(?) AND os IS NOT NULL AND TRIM(os) != '' {date_filter_sql} ORDER BY os ASC"
+        cursor.execute(query, (status_desejado.lower(), *date_params)); return cursor.fetchall() 
     except sqlite3.Error as e: logger.error(f"Erro SQL buscar OS com status '{status_desejado}': {e}"); return []
     finally:
         if conn: conn.close()
 
-# --- NOVAS FUNÇÕES PARA KPIs ---
-def get_kpi_taxa_cobranca_efetuada(db_name='polis_database.db'):
-    conn = None
+def get_kpi_taxa_cobranca_efetuada(db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" WHERE {date_filter_sql_part}"
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(DISTINCT pedido) FROM cobrancas"); 
+        query_total = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {date_filter_sql}"
+        cursor.execute(query_total, tuple(params)); 
         total_pedidos_registados = cursor.fetchone()[0] or 0
         if total_pedidos_registados == 0: return 0.0
-        pedidos_com_cobranca = get_count_pedidos_status_especifico("Com cobrança", db_name)
-        taxa = (pedidos_com_cobranca / total_pedidos_registados) * 100
+        
+        status_com_cobranca = "Com cobrança"
+        query_com_cobranca = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE LOWER(status) = LOWER(?) {date_filter_sql.replace('WHERE','AND') if date_filter_sql else ''}"
+        final_params = (status_com_cobranca.lower(), *params)
+        cursor.execute(query_com_cobranca, final_params); 
+        pedidos_com_cobranca = cursor.fetchone()[0] or 0
+
+        taxa = (pedidos_com_cobranca / total_pedidos_registados) * 100 if total_pedidos_registados > 0 else 0.0
         return round(taxa, 2)
-    except sqlite3.Error as e: logger.error(f"Erro SQL KPI taxa cobrança: {e}"); return 0.0
+    except sqlite3.Error as e: logger.error(f"Erro SQL KPI taxa cobrança: {e}"); return "N/D"
     finally:
         if conn: conn.close()
 
-def get_kpi_percentual_nao_conforme(db_name='polis_database.db'):
-    conn = None
+def get_kpi_percentual_nao_conforme(db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" WHERE {date_filter_sql_part}"
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(DISTINCT pedido) FROM cobrancas"); 
+        query_total = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {date_filter_sql}"
+        cursor.execute(query_total, tuple(params));
         total_pedidos_registados = cursor.fetchone()[0] or 0
         if total_pedidos_registados == 0: return 0.0
-        pedidos_nao_conforme = get_count_pedidos_nao_conforme(db_name)
-        taxa = (pedidos_nao_conforme / total_pedidos_registados) * 100
+        
+        conformidade_verificar = "Verificar"
+        query_nao_conforme = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE LOWER(TRIM(conformidade)) = LOWER(?) {date_filter_sql.replace('WHERE','AND') if date_filter_sql else ''}"
+        final_params = (conformidade_verificar.lower(), *params)
+        cursor.execute(query_nao_conforme, final_params);
+        pedidos_nao_conforme = cursor.fetchone()[0] or 0
+        
+        taxa = (pedidos_nao_conforme / total_pedidos_registados) * 100 if total_pedidos_registados > 0 else 0.0
         return round(taxa, 2)
-    except sqlite3.Error as e: logger.error(f"Erro SQL KPI não conforme: {e}"); return 0.0
+    except sqlite3.Error as e: logger.error(f"Erro SQL KPI não conforme: {e}"); return "N/D"
     finally:
         if conn: conn.close()
 
-def get_kpi_valor_total_pendencias_ativas(db_name='polis_database.db'):
-    conn = None
+def get_kpi_valor_total_pendencias_ativas(db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, params = _build_date_filter_sql("COALESCE(data_emissao, data_importacao)", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        cursor.execute("SELECT SUM(valor) FROM pendentes WHERE LOWER(TRIM(status)) = LOWER(?)", ('pendente',))
+        query = f"SELECT SUM(valor) FROM pendentes WHERE LOWER(TRIM(status)) = LOWER(?) {date_filter_sql}"
+        cursor.execute(query, ('pendente', *params)); 
         total_valor = cursor.fetchone()[0]
         return total_valor if total_valor is not None else 0.0
     except sqlite3.Error as e: logger.error(f"Erro SQL KPI valor pendências: {e}"); return 0.0
     finally:
         if conn: conn.close()
 
-# --- CRUD para Cobranças (mantido) ---
+def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=None, num_months=6):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
+        
+        data_de_query, data_ate_query = data_de, data_ate
+        if not data_de_query and not data_ate_query:
+            end_date_obj = datetime.now()
+            start_date_obj = end_date_obj - pd.DateOffset(months=num_months-1)
+            data_de_query = start_date_obj.strftime('%Y-%m-01')
+            data_ate_query = end_date_obj.strftime('%Y-%m-%d')
+        
+        date_filter_sql_cob, params_cob = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de_query, data_ate_query)
+        if date_filter_sql_cob: date_filter_sql_cob = f" WHERE {date_filter_sql_cob}"
+        
+        date_filter_sql_pend, params_pend = _build_date_filter_sql("COALESCE(data_emissao, data_importacao)", data_de_query, data_ate_query)
+        if date_filter_sql_pend: date_filter_sql_pend = f" WHERE {date_filter_sql_pend}"
+
+        query_cobrancas = f"SELECT strftime('%Y-%m', COALESCE(data_emissao_pedido, data_importacao)) as mes_ano, COUNT(DISTINCT pedido) as total_cobrancas FROM cobrancas {date_filter_sql_cob} GROUP BY mes_ano ORDER BY mes_ano ASC;"
+        cursor.execute(query_cobrancas, tuple(params_cob))
+        cobrancas_raw = {row['mes_ano']: row['total_cobrancas'] for row in cursor.fetchall()}
+
+        query_pendentes = f"SELECT strftime('%Y-%m', COALESCE(data_emissao, data_importacao)) as mes_ano, COUNT(DISTINCT pedido_ref) as total_pendencias FROM pendentes {date_filter_sql_pend} GROUP BY mes_ano ORDER BY mes_ano ASC;"
+        cursor.execute(query_pendentes, tuple(params_pend))
+        pendentes_raw = {row['mes_ano']: row['total_pendencias'] for row in cursor.fetchall()}
+        
+        start_dt = datetime.strptime(data_de_query, '%Y-%m-%d') if data_de_query else (datetime.now() - pd.DateOffset(months=num_months-1)).replace(day=1)
+        end_dt = datetime.strptime(data_ate_query, '%Y-%m-%d') if data_ate_query else datetime.now()
+
+        meses_no_intervalo = pd.date_range(start=start_dt, end=end_dt, freq='MS').strftime('%Y-%m').tolist()
+        labels_grafico = pd.date_range(start=start_dt, end=end_dt, freq='MS').strftime('%b/%y').tolist()
+        if not meses_no_intervalo and (data_de_query or data_ate_query): # Se o intervalo for muito pequeno e não gerar meses
+             labels_grafico = [start_dt.strftime('%b/%y')] if start_dt == end_dt else [start_dt.strftime('%b/%y'), end_dt.strftime('%b/%y')]
+             meses_no_intervalo = [start_dt.strftime('%Y-%m')] if start_dt == end_dt else [start_dt.strftime('%Y-%m'), end_dt.strftime('%Y-%m')]
+
+
+        dados_cobrancas_grafico = [cobrancas_raw.get(mes, 0) for mes in meses_no_intervalo]
+        dados_pendencias_grafico = [pendentes_raw.get(mes, 0) for mes in meses_no_intervalo]
+            
+        return {'labels': labels_grafico, 'cobrancas_data': dados_cobrancas_grafico, 'pendencias_data': dados_pendencias_grafico}
+    except sqlite3.Error as e:
+        logger.error(f"Erro SQL ao buscar evolução mensal: {e}")
+        return {'labels': [], 'cobrancas_data': [], 'pendencias_data': []}
+    finally:
+        if conn: conn.close()
+
+def get_distribuicao_status_cobranca(db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" WHERE {date_filter_sql_part}"
+    try:
+        conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
+        query = f"SELECT status, COUNT(DISTINCT pedido) as total FROM cobrancas {date_filter_sql} GROUP BY status ORDER BY status"
+        cursor.execute(query, tuple(params))
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        logger.error(f"Erro SQL ao buscar distribuição de status: {e}")
+        return []
+    finally:
+        if conn: conn.close()
+
+# --- CRUDs (mantidos) ---
 def get_cobranca_by_id(cobranca_id, db_name):
-    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
@@ -421,7 +532,6 @@ def get_cobranca_by_id(cobranca_id, db_name):
         if conn: conn.close()
 
 def update_cobranca_db(cobranca_id, data, db_name):
-    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
@@ -430,8 +540,14 @@ def update_cobranca_db(cobranca_id, data, db_name):
             cursor.execute("SELECT id FROM cobrancas WHERE pedido = ? AND os = ? AND id != ?", (data['pedido'], data['os'], cobranca_id))
             if cursor.fetchone(): logger.warning(f"Update cobrança ID {cobranca_id} para Pedido/OS já existente."); return False 
         data_emissao_pedido_val = data.get('data_emissao_pedido')
-        if data_emissao_pedido_val: data_emissao_pedido_val = format_date_for_db(data_emissao_pedido_val)
-        else: existing_cobranca = get_cobranca_by_id(cobranca_id, db_name); data_emissao_pedido_val = existing_cobranca['data_emissao_pedido'] if existing_cobranca else None
+        if data_emissao_pedido_val and isinstance(data_emissao_pedido_val, str) and data_emissao_pedido_val.strip(): # Verifica se não é string vazia
+            data_emissao_pedido_val = format_date_for_db(data_emissao_pedido_val)
+        elif not data_emissao_pedido_val: # Se for None ou string vazia, define como None
+             data_emissao_pedido_val = None
+        else: # Se já for um formato de data do banco, mantém
+            existing_cobranca = get_cobranca_by_id(cobranca_id, db_name)
+            data_emissao_pedido_val = existing_cobranca['data_emissao_pedido'] if existing_cobranca else None
+
         cursor.execute("UPDATE cobrancas SET pedido = ?, os = ?, filial = ?, placa = ?, transportadora = ?, conformidade = ?, status = ?, data_emissao_pedido = ?, data_importacao = ? WHERE id = ?",
                        (data.get('pedido'), data.get('os'), data.get('filial'), data.get('placa'), data.get('transportadora'), data.get('conformidade'), data.get('status'), data_emissao_pedido_val, data_atualizacao_utc, cobranca_id))
         conn.commit(); return True if cursor.rowcount > 0 else False
@@ -441,7 +557,6 @@ def update_cobranca_db(cobranca_id, data, db_name):
         if conn: conn.close()
 
 def delete_cobranca_db(cobranca_id, db_name):
-    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
@@ -451,9 +566,7 @@ def delete_cobranca_db(cobranca_id, db_name):
     finally:
         if conn: conn.close()
 
-# --- CRUD para Pendências (mantido) ---
 def get_pendencia_by_id(pendencia_id, db_name):
-    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
@@ -463,7 +576,6 @@ def get_pendencia_by_id(pendencia_id, db_name):
         if conn: conn.close()
 
 def update_pendencia_db(pendencia_id, data, db_name):
-    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
@@ -483,7 +595,6 @@ def update_pendencia_db(pendencia_id, data, db_name):
         if conn: conn.close()
 
 def delete_pendencia_db(pendencia_id, db_name):
-    # ... (código mantido)
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()

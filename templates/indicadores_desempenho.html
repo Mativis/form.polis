@@ -9,89 +9,78 @@
     <h2 class="page-title"><i class="fas fa-chart-line"></i> Indicadores de Desempenho</h2>
 </div>
 
+{# NOVO: Formulário de Filtro de Data #}
+<div class="card filter-form mb-4">
+    <div class="card-header">
+        <h3><i class="fas fa-calendar-alt"></i> Filtrar Indicadores por Data</h3>
+    </div>
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('indicadores_desempenho') }}" class="form-inline">
+            <div class="form-group">
+                <label for="data_de">De:</label>
+                <input type="date" name="data_de" id="data_de" value="{{ filtros_data.data_de or '' }}" class="form-control form-control-sm">
+            </div>
+            <div class="form-group">
+                <label for="data_ate">Até:</label>
+                <input type="date" name="data_ate" id="data_ate" value="{{ filtros_data.data_ate or '' }}" class="form-control form-control-sm">
+            </div>
+            <div class="form-group-actions">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-filter"></i> Aplicar Filtro</button>
+                <a href="{{ url_for('indicadores_desempenho') }}" class="btn btn-secondary btn-sm"><i class="fas fa-times-circle"></i> Limpar Filtros</a>
+            </div>
+        </form>
+        <p class="small text-muted mt-2">
+            Nota: O filtro de data nos KPIs de cobrança considera a Data de Emissão do Pedido (se disponível) ou a Data de Importação da Cobrança.
+            Para KPIs de pendências, considera a Data de Emissão da Pendente (se disponível) ou a Data de Importação da Pendente.
+            Para o gráfico de evolução, considera a data de importação (cobranças e pendências).
+        </p>
+    </div>
+</div>
+
+
 <div class="dashboard-section">
     <h3 class="dashboard-section-title">Visão Geral dos Indicadores Chave (KPIs)</h3>
-    <p class="text-muted mb-4">Acompanhe as métricas mais importantes para a gestão de cobranças e pendências.</p>
+    {# Removido: <p class="text-muted mb-4">...</p> - A nota sobre filtros já foi adicionada #}
 
     <div class="kpi-grid">
-        {# KPI 1: Taxa de Cobranças Efetuadas #}
         <div class="kpi-card">
-            <div class="kpi-icon-container">
-                <i class="fas fa-percent fa-2x"></i>
-            </div>
+            <div class="kpi-icon-container"><i class="fas fa-percent fa-2x"></i></div>
             <h4 class="kpi-title">Taxa de Cobranças Efetuadas</h4>
             <p class="kpi-value">{{ kpis.taxa_cobranca_efetuada | default('N/D') }}%</p>
-            <p class="kpi-description">Percentagem de pedidos com status "Com cobrança" sobre o total de pedidos registados.</p>
-            {# <a href="{{ url_for('relatorio_cobrancas', filtro_status='Com cobrança') }}" class="kpi-link">Ver detalhes</a> #}
+            <p class="kpi-description">Percentagem de pedidos com status "Com cobrança" sobre o total de pedidos registados no período.</p>
         </div>
-
-        {# KPI 2: Percentual de Não Conformidade (Verificar) #}
         <div class="kpi-card">
-            <div class="kpi-icon-container">
-                <i class="fas fa-exclamation-triangle fa-2x"></i>
-            </div>
+            <div class="kpi-icon-container"><i class="fas fa-exclamation-triangle fa-2x"></i></div>
             <h4 class="kpi-title">Percentual para Verificar (Conformidade)</h4>
             <p class="kpi-value">{{ kpis.percentual_nao_conforme | default('N/D') }}%</p>
-            <p class="kpi-description">Percentagem de pedidos com conformidade "Verificar" sobre o total de pedidos registados.</p>
-            {# <a href="{{ url_for('relatorio_cobrancas', filtro_conformidade='Verificar') }}" class="kpi-link">Ver detalhes</a> #}
+            <p class="kpi-description">Percentagem de pedidos com conformidade "Verificar" sobre o total de pedidos registados no período.</p>
         </div>
-
-        {# KPI 3: Tempo Médio de Resolução (Pendentes) - Placeholder #}
         <div class="kpi-card">
-            <div class="kpi-icon-container">
-                <i class="fas fa-hourglass-half fa-2x"></i>
-            </div>
+            <div class="kpi-icon-container"><i class="fas fa-hourglass-half fa-2x"></i></div>
             <h4 class="kpi-title">Tempo Médio de Resolução (Pendentes)</h4>
             <p class="kpi-value">{{ kpis.tempo_medio_resolucao | default('N/D') }}</p>
             <p class="kpi-description">Tempo médio para finalizar pendências (cálculo a ser implementado).</p>
-            {# <a href="#" class="kpi-link">Ver detalhes</a> #}
         </div>
-        
-        {# KPI 4: Valor Total de Pendências Ativas #}
         <div class="kpi-card">
-            <div class="kpi-icon-container">
-                <i class="fas fa-dollar-sign fa-2x"></i>
-            </div>
+            <div class="kpi-icon-container"><i class="fas fa-dollar-sign fa-2x"></i></div>
             <h4 class="kpi-title">Valor Total de Pendências Ativas</h4>
             <p class="kpi-value">{{ kpis.valor_total_pendencias | format_currency | default('N/D') }}</p>
-            <p class="kpi-description">Soma dos valores de todas as pendências com status "Pendente".</p>
+            <p class="kpi-description">Soma dos valores de todas as pendências com status "Pendente" no período.</p>
             <a href="{{ url_for('relatorio_pendentes', filtro_status_pend='Pendente') }}" class="kpi-link">Ver pendências ativas <i class="fas fa-angle-right fa-xs"></i></a>
-        </div>
-
-        {# KPI Placeholder 1 #}
-        <div class="kpi-card placeholder">
-            <div class="kpi-icon-container">
-                <i class="fas fa-tasks fa-2x"></i>
-            </div>
-            <h4 class="kpi-title">Pedidos por Status</h4>
-            <p class="kpi-value">Em Breve</p>
-            <p class="kpi-description">Distribuição de pedidos pelos diferentes status de cobrança.</p>
-        </div>
-
-        {# KPI Placeholder 2 #}
-        <div class="kpi-card placeholder">
-            <div class="kpi-icon-container">
-                <i class="fas fa-calendar-check fa-2x"></i>
-            </div>
-            <h4 class="kpi-title">Pendências por Prazo</h4>
-            <p class="kpi-value">Em Breve</p>
-            <p class="kpi-description">Análise de pendências por data de vencimento ou criação.</p>
         </div>
     </div>
 </div>
 
-{# Secção para Gráficos (Placeholder) #}
 <div class="dashboard-section">
     <h3 class="dashboard-section-title">Visualizações Gráficas</h3>
     <div class="row">
         <div class="col-md-6 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h4>Evolução de Cobranças vs Pendências</h4>
+                    <h4>Evolução Mensal (Cobranças Lançadas vs Pendências Criadas)</h4>
                 </div>
                 <div class="card-body text-center">
-                    <i class="fas fa-chart-area fa-4x text-muted my-3"></i>
-                    <p class="text-muted">Gráfico de evolução temporal será implementado aqui.</p>
+                    <canvas id="evolucaoChart" height="250"></canvas>
                 </div>
             </div>
         </div>
@@ -101,67 +90,27 @@
                     <h4>Distribuição de Status de Cobrança</h4>
                 </div>
                 <div class="card-body text-center">
-                    <i class="fas fa-chart-pie fa-4x text-muted my-3"></i>
-                    <p class="text-muted">Gráfico de pizza/barras da distribuição de status será implementado aqui.</p>
+                    <canvas id="statusCobrancaChart" height="250"></canvas>
                 </div>
             </div>
         </div>
     </div>
 </div>
-
 {% endblock %}
 
 {% block head_extra %}
 {{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <style>
     .dashboard-section { margin-bottom: 2.5rem; }
-    .dashboard-section-title { 
-        font-size: 1.5rem; 
-        color: var(--text-color); 
-        margin-bottom: 1.5rem; 
-        padding-bottom: 0.5rem; 
-        border-bottom: 2px solid var(--accent-color-light); 
-    }
-    .kpi-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 2rem;
-    }
-    .kpi-card {
-        background-color: var(--card-bg);
-        border: 1px solid var(--card-border-color);
-        border-radius: var(--border-radius-base);
-        padding: 1.5rem;
-        text-align: center;
-        box-shadow: var(--box-shadow-sm);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
-    }
-    .kpi-card:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--card-hover-box-shadow);
-    }
+    .dashboard-section-title { font-size: 1.5rem; color: var(--text-color); margin-bottom: 1.5rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--accent-color-light); }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+    .kpi-card { background-color: var(--card-bg); border: 1px solid var(--card-border-color); border-radius: var(--border-radius-base); padding: 1.5rem; text-align: center; box-shadow: var(--box-shadow-sm); display: flex; flex-direction: column; align-items: center; transition: transform 0.2s ease-out, box-shadow 0.2s ease-out; }
+    .kpi-card:hover { transform: translateY(-4px); box-shadow: var(--card-hover-box-shadow); }
     .kpi-card.placeholder { opacity: 0.7; border-style: dashed; }
-    .kpi-icon-container {
-        color: var(--accent-color);
-        margin-bottom: 1rem;
-        background-color: var(--accent-color-light);
-        border-radius: 50%;
-        width: 60px;
-        height: 60px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    html[data-theme="noite"] .kpi-icon-container {
-        background-color: var(--accent-color); 
-    }
-    html[data-theme="noite"] .kpi-icon-container i {
-        color: var(--card-bg); 
-    }
+    .kpi-icon-container { color: var(--accent-color); margin-bottom: 1rem; background-color: var(--accent-color-light); border-radius: 50%; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; }
+    html[data-theme="noite"] .kpi-icon-container { background-color: var(--accent-color); }
+    html[data-theme="noite"] .kpi-icon-container i { color: var(--card-bg); }
     .kpi-icon-container .fas, .kpi-icon-container .fab { font-size: 1.8rem; }
     .kpi-title { font-size: 1.1rem; color: var(--text-color); margin-bottom: 0.5rem; font-weight: 600; min-height: 2.2em; }
     .kpi-value { font-size: 2rem; font-weight: 700; color: var(--accent-color); line-height: 1.1; margin-bottom: 0.5rem; }
@@ -169,10 +118,93 @@
     .kpi-description { font-size: 0.85rem; color: var(--text-muted-color); margin-bottom: 1rem; flex-grow: 1; min-height: 3em; }
     .kpi-link { font-size: 0.8rem; color: var(--link-color); text-decoration: none; font-weight: 500; margin-top: auto; }
     .kpi-link:hover { color: var(--link-hover-color); text-decoration: underline; }
-    .kpi-link .fa-xs { font-size: 0.8em; } /* Para o ícone de seta no link */
+    .kpi-link .fa-xs { font-size: 0.8em; } 
     .row { display: flex; flex-wrap: wrap; margin-right: -15px; margin-left: -15px; }
     .col-md-6 { position: relative; width: 100%; padding-right: 15px; padding-left: 15px; }
     @media (min-width: 768px) { .col-md-6 { flex: 0 0 50%; max-width: 50%; } }
     .my-3 { margin-top: 1rem !important; margin-bottom: 1rem !important; }
+    .text-center .fas.fa-4x { font-size: 4em; } 
+    /* Estilos para o formulário de filtro de data */
+    .filter-form .form-inline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; }
+    .filter-form .form-group { margin-bottom: 0; flex: 1 1 auto; min-width: 180px; }
+    .filter-form .form-group-actions { margin-left: auto; padding-top: 1.85rem; /* Alinhar com labels */ }
 </style>
+{% endblock %}
+
+{% block scripts_extra %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const ctxEvolucao = document.getElementById('evolucaoChart');
+        const ctxStatusCobranca = document.getElementById('statusCobrancaChart');
+
+        const chartEvolucaoData = {{ chart_data.evolucao_meses | tojson | safe }};
+        const chartEvolucaoCobrancas = {{ chart_data.evolucao_cobrancas | tojson | safe }};
+        const chartEvolucaoPendencias = {{ chart_data.evolucao_pendencias | tojson | safe }};
+        const chartStatusLabels = {{ chart_data.distribuicao_status_labels | tojson | safe }};
+        const chartStatusValores = {{ chart_data.distribuicao_status_valores | tojson | safe }};
+
+        const rootStyles = getComputedStyle(document.documentElement);
+        const accentColor = rootStyles.getPropertyValue('--accent-color').trim();
+        const secondaryColor = rootStyles.getPropertyValue('--secondary-color').trim() || '#FF8C00';
+        const textColor = rootStyles.getPropertyValue('--text-color').trim();
+        const cardBgColor = rootStyles.getPropertyValue('--card-bg').trim();
+        const gridColor = rootStyles.getPropertyValue('--table-border-color').trim();
+
+        Chart.defaults.color = textColor;
+        Chart.defaults.borderColor = gridColor;
+
+        if (ctxEvolucao && chartEvolucaoData && chartEvolucaoData.length > 0) {
+            new Chart(ctxEvolucao, {
+                type: 'line',
+                data: {
+                    labels: chartEvolucaoData,
+                    datasets: [{
+                        label: 'Cobranças Lançadas', data: chartEvolucaoCobrancas,
+                        borderColor: accentColor, backgroundColor: accentColor.replace(')', ', 0.2)'),
+                        fill: false, tension: 0.1
+                    }, {
+                        label: 'Pendências Criadas', data: chartEvolucaoPendencias,
+                        borderColor: secondaryColor, backgroundColor: secondaryColor.replace(')', ', 0.2)'),
+                        fill: false, tension: 0.1
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false,
+                           scales: { y: { beginAtZero: true, ticks: { color: textColor }, grid: { color: gridColor } },
+                                     x: { ticks: { color: textColor }, grid: { color: gridColor } } },
+                           plugins: { legend: { labels: { color: textColor } } } }
+            });
+        } else if (ctxEvolucao) {
+            ctxEvolucao.parentElement.innerHTML = '<p class="text-muted text-center py-5">Dados de evolução não disponíveis para o período selecionado.</p>';
+        }
+
+        if (ctxStatusCobranca && chartStatusLabels && chartStatusLabels.length > 0 && chartStatusValores.some(v => v > 0)) {
+            new Chart(ctxStatusCobranca, {
+                type: 'pie', 
+                data: {
+                    labels: chartStatusLabels,
+                    datasets: [{
+                        label: 'Distribuição de Status', data: chartStatusValores,
+                        backgroundColor: [ 
+                            accentColor, 
+                            rootStyles.getPropertyValue('--badge-warning-bg-L').trim() || '#FEF3C7',
+                            '#fd7e14', '#6f42c1' // Cores adicionais para mais status
+                        ],
+                        borderColor: cardBgColor, borderWidth: 2
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false,
+                           plugins: { legend: { position: 'top', labels: { color: textColor } },
+                                      tooltip: { callbacks: { label: function(context) {
+                                          let label = context.label || ''; if (label) { label += ': '; }
+                                          if (context.parsed !== null) { label += context.parsed; } return label;
+                                      }}}
+                                    }
+                         }
+            });
+        } else if (ctxStatusCobranca) {
+            ctxStatusCobranca.parentElement.innerHTML = '<p class="text-muted text-center py-5">Dados de distribuição de status não disponíveis para o período selecionado.</p>';
+        }
+    });
+</script>
 {% endblock %}
