@@ -39,10 +39,12 @@ from utils.excel_processor import (
     get_kpi_percentual_nao_conforme,
     get_kpi_valor_total_pendencias_ativas,
     get_kpi_tempo_medio_resolucao_pendencias,
+    get_kpi_valor_investido_abastecimento,
+    get_kpi_valor_investido_estoque,
     get_evolucao_mensal_cobrancas_pendencias,
     get_distribuicao_status_cobranca,
     add_or_update_cobranca_manual,
-    get_pendentes_finalizadas_para_selecao, # Garantir que esta importação está correta
+    get_pendentes_finalizadas_para_selecao, 
     get_pendente_by_id_para_vinculo
 )
 
@@ -116,7 +118,7 @@ def format_date_br_filter(value_str_or_dt):
     try:
         dt_obj = None
         if isinstance(value_str_or_dt, str):
-            date_part_str = value_str_or_dt.split(' ')[0]
+            date_part_str = value_str_or_dt.split(' ')[0] 
             common_formats = ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%m/%d/%Y', '%d/%m/%y', '%y-%m-%d', '%d-%m-%y', '%m/%d/%y')
             for fmt in common_formats:
                 try: dt_obj = datetime.strptime(date_part_str, fmt); break 
@@ -285,42 +287,98 @@ def dashboard_manutencao():
 @login_required
 def indicadores_desempenho():
     db_path = app.config['DATABASE']
-    data_de_filtro_str = request.args.get('data_de', None)
-    data_ate_filtro_str = request.args.get('data_ate', None)
+    
+    data_de_input = request.args.get('data_de', None) 
+    data_ate_input = request.args.get('data_ate', None)
+
+    data_de_para_sql = None
+    data_ate_para_sql = None
+    
+    # As datas para o template serão as que o Flatpickr espera no 'value' (YYYY-MM-DD)
+    # se forem válidas, ou o input original do usuário se inválidas.
+    data_de_para_template = data_de_input 
+    data_ate_para_template = data_ate_input 
+
     data_de_obj, data_ate_obj = None, None
-    if data_de_filtro_str:
-        try: data_de_obj = datetime.strptime(data_de_filtro_str, '%Y-%m-%d')
-        except ValueError: flash("Formato de 'Data De' inválido. Use AAAA-MM-DD.", "warning"); data_de_filtro_str = None
-    if data_ate_filtro_str:
-        try: data_ate_obj = datetime.strptime(data_ate_filtro_str, '%Y-%m-%d')
-        except ValueError: flash("Formato de 'Data Até' inválido. Use AAAA-MM-DD.", "warning"); data_ate_filtro_str = None
+
+    if data_de_input:
+        try:
+            # Flatpickr com altInput envia no formato altFormat (Y-m-d)
+            data_de_obj = datetime.strptime(data_de_input, '%Y-%m-%d')
+            data_de_para_sql = data_de_input
+            data_de_para_template = data_de_input # Já está no formato correto para o value do flatpickr
+        except ValueError:
+            # Se falhar, tenta converter de d/m/Y (caso o altInput não funcione ou digitação manual)
+            try:
+                data_de_obj = datetime.strptime(data_de_input, '%d/%m/%Y')
+                data_de_para_sql = data_de_obj.strftime('%Y-%m-%d')
+                data_de_para_template = data_de_para_sql # Atualiza para o formato correto para o value
+            except ValueError:
+                flash(f"Formato de 'Data De' ({data_de_input}) inválido. Use o seletor ou DD/MM/AAAA.", "warning")
+                data_de_para_sql = None
+                # data_de_para_template já tem o input original
+    
+    if data_ate_input:
+        try:
+            data_ate_obj = datetime.strptime(data_ate_input, '%Y-%m-%d')
+            data_ate_para_sql = data_ate_input
+            data_ate_para_template = data_ate_input
+        except ValueError:
+            try:
+                data_ate_obj = datetime.strptime(data_ate_input, '%d/%m/%Y')
+                data_ate_para_sql = data_ate_obj.strftime('%Y-%m-%d')
+                data_ate_para_template = data_ate_para_sql
+            except ValueError:
+                flash(f"Formato de 'Data Até' ({data_ate_input}) inválido. Use o seletor ou DD/MM/AAAA.", "warning")
+                data_ate_para_sql = None
+                # data_ate_para_template já tem o input original
+
     granularidade_grafico = 'mes' 
     if data_de_obj and data_ate_obj:
-        diferenca_dias = (data_ate_obj - data_de_obj).days
-        if diferenca_dias <= 10: granularidade_grafico = 'dia'
-        elif diferenca_dias <= 90: granularidade_grafico = 'semana'
-    elif data_de_filtro_str or data_ate_filtro_str: logger.info(f"Apenas uma data de filtro fornecida para indicadores, usando granularidade mensal para gráfico de evolução.")
-    kpis_data = {'taxa_cobranca_efetuada': "N/D", 'percentual_nao_conforme': "N/D", 'tempo_medio_resolucao': "N/D", 'valor_total_pendencias': 0.0}
+        if data_de_obj > data_ate_obj:
+            flash("'Data De' não pode ser posterior à 'Data Até'. Os filtros de data foram ignorados.", "warning")
+            data_de_para_sql = None 
+            data_ate_para_sql = None
+            data_de_para_template = None 
+            data_ate_para_template = None
+        else:
+            diferenca_dias = (data_ate_obj - data_de_obj).days
+            if diferenca_dias <= 10: granularidade_grafico = 'dia'
+            elif diferenca_dias <= 90: granularidade_grafico = 'semana'
+    elif data_de_para_sql or data_ate_para_sql: 
+        logger.info(f"Apenas uma data de filtro válida fornecida para indicadores, usando granularidade mensal para gráfico de evolução.")
+        
+    kpis_data = {
+        'taxa_cobranca_efetuada': "N/D", 'percentual_nao_conforme': "N/D", 
+        'tempo_medio_resolucao': "N/D", 'valor_total_pendencias': 0.0,
+        'valor_investido_abastecimento': 0.0, 'valor_investido_estoque': 0.0
+    }
     chart_data = {'evolucao_meses': [], 'evolucao_cobrancas': [], 'evolucao_pendencias': [], 'distribuicao_status_labels': [], 'distribuicao_status_valores': []}
     try:
-        kpis_data['taxa_cobranca_efetuada'] = get_kpi_taxa_cobranca_efetuada(db_path, data_de_filtro_str, data_ate_filtro_str)
-        kpis_data['percentual_nao_conforme'] = get_kpi_percentual_nao_conforme(db_path, data_de_filtro_str, data_ate_filtro_str)
-        kpis_data['valor_total_pendencias'] = get_kpi_valor_total_pendencias_ativas(db_path, data_de_filtro_str, data_ate_filtro_str)
-        kpis_data['tempo_medio_resolucao'] = get_kpi_tempo_medio_resolucao_pendencias(db_path, data_de_filtro_str, data_ate_filtro_str)
-        evolucao_dados = get_evolucao_mensal_cobrancas_pendencias(db_path, data_de_filtro_str, data_ate_filtro_str, granularidade=granularidade_grafico)
+        kpis_data['taxa_cobranca_efetuada'] = get_kpi_taxa_cobranca_efetuada(db_path, data_de_para_sql, data_ate_para_sql)
+        kpis_data['percentual_nao_conforme'] = get_kpi_percentual_nao_conforme(db_path, data_de_para_sql, data_ate_para_sql)
+        kpis_data['valor_total_pendencias'] = get_kpi_valor_total_pendencias_ativas(db_path, data_de_para_sql, data_ate_para_sql)
+        kpis_data['tempo_medio_resolucao'] = get_kpi_tempo_medio_resolucao_pendencias(db_path, data_de_para_sql, data_ate_para_sql)
+        kpis_data['valor_investido_abastecimento'] = get_kpi_valor_investido_abastecimento(db_path, data_de_para_sql, data_ate_para_sql)
+        kpis_data['valor_investido_estoque'] = get_kpi_valor_investido_estoque(db_path, data_de_para_sql, data_ate_para_sql)
+        
+        evolucao_dados = get_evolucao_mensal_cobrancas_pendencias(db_path, data_de_para_sql, data_ate_para_sql, granularidade=granularidade_grafico)
         if evolucao_dados: 
             chart_data['evolucao_meses'] = evolucao_dados.get('labels', []) 
             chart_data['evolucao_cobrancas'] = evolucao_dados.get('cobrancas_data', [])
             chart_data['evolucao_pendencias'] = evolucao_dados.get('pendencias_data', [])
-        dist_status_dados = get_distribuicao_status_cobranca(db_path, data_de_filtro_str, data_ate_filtro_str)
+        dist_status_dados = get_distribuicao_status_cobranca(db_path, data_de_para_sql, data_ate_para_sql)
         if dist_status_dados: 
             chart_data['distribuicao_status_labels'] = [item['status'] for item in dist_status_dados]
             chart_data['distribuicao_status_valores'] = [item['total'] for item in dist_status_dados]
     except Exception as e:
         logger.error(f"Erro ao calcular KPIs/dados de gráfico: {e}", exc_info=True)
         flash("Erro ao calcular indicadores ou dados para gráficos.", "warning")
+    
     return render_template('indicadores_desempenho.html', kpis=kpis_data, chart_data=chart_data,
-                           filtros_data={'data_de': data_de_filtro_str or '', 'data_ate': data_ate_filtro_str or ''})
+                           filtros_data={'data_de': data_de_para_template or '', 
+                                         'data_ate': data_ate_para_template or ''})
+
 
 # --- NOVAS ROTAS ---
 @app.route('/integrar-os', methods=['GET', 'POST'])
@@ -328,7 +386,6 @@ def indicadores_desempenho():
 def integrar_os():
     form_data_manual = {} 
     form_data_vincular = {}
-    # Busca pendentes finalizadas para ambos os formulários (se aplicável ao GET)
     pendentes_finalizadas_lista = get_pendentes_finalizadas_para_selecao(app.config['DATABASE'])
 
     if request.method == 'POST':
@@ -363,7 +420,7 @@ def integrar_os():
                 'os': request.form.get('os', '').strip(),
                 'placa': request.form.get('placa', '').strip().upper(),
                 'transportadora': request.form.get('transportadora', '').strip(),
-                'status_cobranca': request.form.get('status_cobranca', '').strip(),
+                'status_cobranca': request.form.get('status_cobranca', '').strip(), 
                 'conformidade': request.form.get('conformidade', '').strip(),
                 'filial': request.form.get('filial', '').strip(),
             }
@@ -382,7 +439,7 @@ def integrar_os():
                         'os': dados_nova_os['os'],
                         'placa': dados_nova_os['placa'],
                         'transportadora': dados_nova_os['transportadora'],
-                        'status': dados_nova_os['status_cobranca'],
+                        'status': dados_nova_os['status_cobranca'], 
                         'conformidade': dados_nova_os['conformidade'],
                         'filial': dados_nova_os['filial'] if dados_nova_os['filial'] else pendente_original['filial'],
                         'data_emissao_pedido': pendente_original['data_emissao'] 
@@ -401,43 +458,66 @@ def integrar_os():
 @app.route('/abastecimento-estoque', methods=['GET', 'POST'])
 @login_required
 def abastecimento_estoque():
-    form_data = {}
+    form_data = {} 
     pendentes_finalizadas_lista = get_pendentes_finalizadas_para_selecao(app.config['DATABASE'])
 
     if request.method == 'POST':
-        id_pendente_selecionada = request.form.get('id_pendente_selecionada')
+        form_data = request.form 
+        
+        ids_pendentes_selecionadas = request.form.getlist('ids_pendentes_selecionadas')
         categoria_custo = request.form.get('categoria_custo') 
         placa_opcional = request.form.get('placa', '').strip().upper() or "N/A"
         filial_opcional = request.form.get('filial', '').strip()
 
-        form_data = request.form.to_dict() 
-
-        if not id_pendente_selecionada or not categoria_custo:
-            flash("Selecione um Pedido Finalizado e uma Categoria de Custo.", "error")
+        if not ids_pendentes_selecionadas or not categoria_custo:
+            flash("Selecione um ou mais Pedidos Finalizados e uma Categoria de Custo.", "error")
         else:
-            pendente_original = get_pendente_by_id_para_vinculo(id_pendente_selecionada, app.config['DATABASE'])
-            if not pendente_original or pendente_original['status'].lower() != 'finalizado':
-                flash("Pendência selecionada não encontrada ou não está finalizada.", "error")
-            else:
-                dados_cobranca = {
-                    'pedido': pendente_original['pedido_ref'],
-                    'os': categoria_custo, 
-                    'placa': placa_opcional,
-                    'transportadora': "TRANSAC TRANSPORTE ROD. LTDA",
-                    'status': "Com cobrança",
-                    'conformidade': "Conforme", 
-                    'filial': filial_opcional if filial_opcional else pendente_original['filial'],
-                    'data_emissao_pedido': pendente_original['data_emissao']
-                }
-                success, message = add_or_update_cobranca_manual(dados_cobranca, app.config['DATABASE'])
-                flash(message, "success" if success else "error")
-                if success:
-                    log_audit(f"CUSTO_LANCADO_{categoria_custo.upper()}", f"Pedido: {pendente_original['pedido_ref']}, OS: {categoria_custo}")
-                    return redirect(url_for('relatorio_cobrancas', filtro_pedido=pendente_original['pedido_ref'], filtro_os=categoria_custo))
-    
+            sucessos = 0; falhas = 0; os_criadas = []
+            for pendente_id_str in ids_pendentes_selecionadas:
+                try:
+                    id_pendente = int(pendente_id_str)
+                    pendente_original = get_pendente_by_id_para_vinculo(id_pendente, app.config['DATABASE'])
+                    
+                    if not pendente_original or pendente_original['status'].lower() != 'finalizado':
+                        flash(f"Pendência ID {id_pendente} (Pedido: {pendente_original['pedido_ref'] if pendente_original else 'N/A'}) não encontrada ou não está finalizada.", "warning")
+                        falhas += 1; continue
+
+                    dados_cobranca = {
+                        'pedido': pendente_original['pedido_ref'],
+                        'os': categoria_custo, 
+                        'placa': placa_opcional,
+                        'transportadora': "TRANSAC TRANSPORTE ROD. LTDA",
+                        'status': "Com cobrança",
+                        'conformidade': "Conforme", 
+                        'filial': filial_opcional if filial_opcional else pendente_original['filial'],
+                        'data_emissao_pedido': pendente_original['data_emissao']
+                    }
+                    success, message = add_or_update_cobranca_manual(dados_cobranca, app.config['DATABASE'])
+                    if success:
+                        sucessos += 1; os_criadas.append(dados_cobranca['os'])
+                        log_audit(f"CUSTO_LANCADO_{categoria_custo.upper()}", f"Pedido: {pendente_original['pedido_ref']}, OS: {categoria_custo}")
+                    else:
+                        falhas += 1
+                        flash(f"Falha ao lançar custo para Pedido {pendente_original['pedido_ref']}: {message}", "error")
+                except ValueError:
+                    flash(f"ID de pendente inválido: {pendente_id_str}", "error"); falhas +=1
+                except Exception as e:
+                    logger.error(f"Erro inesperado ao processar pendente ID {pendente_id_str} para abastecimento/estoque: {e}", exc_info=True)
+                    flash(f"Erro inesperado ao processar pendente ID {pendente_id_str}.", "error"); falhas +=1
+
+            if sucessos > 0: flash(f"{sucessos} custo(s) de '{categoria_custo}' lançado(s) com sucesso!", "success")
+            if falhas > 0: flash(f"{falhas} lançamento(s) de custo falharam. Verifique as mensagens.", "warning")
+            
+            if sucessos > 0 and falhas == 0: 
+                primeiro_pedido_processado = get_pendente_by_id_para_vinculo(int(ids_pendentes_selecionadas[0]), app.config['DATABASE'])['pedido_ref'] if ids_pendentes_selecionadas else None
+                if primeiro_pedido_processado:
+                    return redirect(url_for('relatorio_cobrancas', filtro_pedido=primeiro_pedido_processado, filtro_os=categoria_custo))
+                else:
+                    return redirect(url_for('relatorio_cobrancas'))
+            
     return render_template('abastecimento_estoque.html', 
                            pendentes_finalizadas_lista=pendentes_finalizadas_lista,
-                           form_data=form_data)
+                           form_data=form_data) 
 
 
 # --- CRUD para Cobranças ---

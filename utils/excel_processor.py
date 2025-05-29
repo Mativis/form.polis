@@ -335,13 +335,9 @@ def get_pendentes_finalizadas_para_selecao(db_name='polis_database.db'):
             FROM pendentes p
             LEFT JOIN cobrancas c ON p.pedido_ref = c.pedido 
             WHERE LOWER(TRIM(p.status)) = LOWER('finalizado')
-              AND c.pedido IS NULL  -- Garante que o pedido_ref da pendente não existe como pedido em cobranças
+              AND c.pedido IS NULL  
             ORDER BY p.pedido_ref ASC
         """
-        # Se quiser permitir vincular mesmo que já exista uma OS para o pedido, mas não ESTA OS específica,
-        # a lógica de filtro precisaria ser mais complexa ou feita no app.py.
-        # Por agora, estamos a excluir qualquer pedido_ref que já tenha *qualquer* entrada em cobrancas.
-
         cursor.execute(query)
         return cursor.fetchall()
     except sqlite3.Error as e:
@@ -349,7 +345,6 @@ def get_pendentes_finalizadas_para_selecao(db_name='polis_database.db'):
         return []
     finally:
         if conn: conn.close()
-
 
 def get_distinct_values(column_name, table_name, db_name='polis_database.db'):
     conn = sqlite3.connect(db_name); cursor = conn.cursor()
@@ -567,6 +562,59 @@ def get_kpi_tempo_medio_resolucao_pendencias(db_name, data_de=None, data_ate=Non
     except Exception as e_gen: logger.error(f"Erro geral KPI tempo médio: {e_gen}", exc_info=True); return "N/D"
     finally:
         if conn: conn.close()
+
+def get_kpi_valor_investido_abastecimento(db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, params = "", []
+    # O filtro de data aplica-se à data_importacao da cobrança, pois é quando o custo foi "lançado"
+    if data_de or data_ate:
+        date_filter_sql_part, params = _build_date_filter_sql("c.data_importacao", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+    try:
+        conn = sqlite3.connect(db_name); cursor = conn.cursor()
+        query = f"""
+            SELECT SUM(p.valor) 
+            FROM pendentes p
+            JOIN cobrancas c ON p.pedido_ref = c.pedido
+            WHERE LOWER(TRIM(c.os)) = LOWER('abastecimento')
+              AND LOWER(TRIM(p.status)) = LOWER('finalizado') 
+              {date_filter_sql}
+        """
+        # Adiciona os parâmetros do filtro de data APÓS os parâmetros fixos da query
+        final_params = tuple(params)
+        cursor.execute(query, final_params)
+        total_valor = cursor.fetchone()[0]
+        return total_valor if total_valor is not None else 0.0
+    except sqlite3.Error as e:
+        logger.error(f"Erro SQL KPI valor investido em abastecimento: {e}")
+        return 0.0
+    finally:
+        if conn: conn.close()
+
+def get_kpi_valor_investido_estoque(db_name, data_de=None, data_ate=None):
+    conn = None; date_filter_sql, params = "", []
+    if data_de or data_ate:
+        date_filter_sql_part, params = _build_date_filter_sql("c.data_importacao", data_de, data_ate)
+        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+    try:
+        conn = sqlite3.connect(db_name); cursor = conn.cursor()
+        query = f"""
+            SELECT SUM(p.valor) 
+            FROM pendentes p
+            JOIN cobrancas c ON p.pedido_ref = c.pedido
+            WHERE LOWER(TRIM(c.os)) = LOWER('estoque')
+              AND LOWER(TRIM(p.status)) = LOWER('finalizado')
+              {date_filter_sql}
+        """
+        final_params = tuple(params)
+        cursor.execute(query, final_params)
+        total_valor = cursor.fetchone()[0]
+        return total_valor if total_valor is not None else 0.0
+    except sqlite3.Error as e:
+        logger.error(f"Erro SQL KPI valor investido em estoque: {e}")
+        return 0.0
+    finally:
+        if conn: conn.close()
+
 
 def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=None, granularidade='mes'):
     conn = None

@@ -2,220 +2,372 @@
 
 {% block title %}Indicadores de Desempenho - Pólis{% endblock %}
 
-{% block content %}
-{# O botão Voltar será renderizado pelo base.html se pagina_anterior_url for passado pela rota #}
+{% block head_extra %}
+{{ super() }}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script> 
 
+<style>
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .kpi-card {
+        background-color: var(--card-bg);
+        padding: 1.5rem;
+        border-radius: var(--border-radius-lg);
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--card-border-color);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+    .kpi-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+    }
+    .kpi-card .icon {
+        font-size: 2rem;
+        margin-bottom: 0.8rem;
+        color: var(--primary-color);
+        width: 40px;
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background-color: var(--primary-light-color); 
+    }
+    html[data-theme="noite"] .kpi-card .icon {
+        background-color: var(--primary-dark-color); 
+    }
+
+    .kpi-card h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-muted-color);
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .kpi-card .value {
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: var(--text-color);
+        margin-bottom: 0.2rem;
+        line-height: 1.2;
+    }
+    .kpi-card .unit {
+        font-size: 0.9rem;
+        color: var(--text-muted-color);
+    }
+    .chart-container {
+        background-color: var(--card-bg);
+        padding: 1.5rem;
+        border-radius: var(--border-radius-lg);
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--card-border-color);
+        margin-bottom: 1.5rem;
+        height: 320px; /* MUDANÇA: Definindo uma altura fixa para o container */
+                     /* Ou pode usar min-height se preferir que cresça mais com conteúdo interno (ex: legenda muito grande) */
+                     /* Alternativamente, poderia usar aspect-ratio aqui se o Chart.js mantivesse o aspect ratio */
+    }
+    .chart-container h4 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: var(--text-color);
+    }
+    .filters-container {
+        background-color: var(--card-bg);
+        padding: 1.25rem;
+        border-radius: var(--border-radius-lg);
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--card-border-color);
+        margin-bottom: 2rem;
+    }
+    .filters-container h3 {
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: var(--text-color);
+    }
+    .filter-form-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: flex-end; 
+    }
+    .filter-form-row .form-group {
+        flex-grow: 1;
+        min-width: 200px; 
+    }
+    .filter-form-row .form-group label {
+        font-weight: 500;
+    }
+    .filter-form-row .btn-primary, .filter-form-row .btn-secondary {
+        height: calc(1.5em + .75rem + 2px); 
+        align-self: flex-end;
+    }
+    .flatpickr-input {
+        background-color: var(--input-bg) !important;
+        color: var(--input-text-color) !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
 <div class="page-header">
     <h2 class="page-title"><i class="fas fa-chart-line"></i> Indicadores de Desempenho</h2>
 </div>
 
-{# Formulário de Filtro de Data #}
-<div class="card filter-form mb-4">
-    <div class="card-header">
-        <h3><i class="fas fa-calendar-alt"></i> Filtrar Indicadores por Data</h3>
-    </div>
-    <div class="card-body">
-        <form method="GET" action="{{ url_for('indicadores_desempenho') }}" class="form-inline">
+<div class="filters-container">
+    <h3><i class="fas fa-filter"></i> Filtrar Período</h3>
+    <form method="GET" action="{{ url_for('indicadores_desempenho') }}">
+        <div class="filter-form-row">
             <div class="form-group">
                 <label for="data_de">De:</label>
-                <input type="date" name="data_de" id="data_de" value="{{ filtros_data.data_de or '' }}" class="form-control form-control-sm">
+                <input type="text" id="data_de" name="data_de" class="form-control flatpickr-input" placeholder="DD/MM/AAAA" value="{{ filtros_data.data_de_fmt or filtros_data.data_de or '' }}">
             </div>
             <div class="form-group">
                 <label for="data_ate">Até:</label>
-                <input type="date" name="data_ate" id="data_ate" value="{{ filtros_data.data_ate or '' }}" class="form-control form-control-sm">
+                <input type="text" id="data_ate" name="data_ate" class="form-control flatpickr-input" placeholder="DD/MM/AAAA" value="{{ filtros_data.data_ate_fmt or filtros_data.data_ate or '' }}">
             </div>
-            <div class="form-group-actions">
-                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-filter"></i> Aplicar Filtro</button>
-                <a href="{{ url_for('indicadores_desempenho') }}" class="btn btn-secondary btn-sm"><i class="fas fa-times-circle"></i> Limpar Filtros</a>
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Aplicar</button>
+                <a href="{{ url_for('indicadores_desempenho') }}" class="btn btn-secondary"><i class="fas fa-eraser"></i> Limpar</a>
             </div>
-        </form>
-        <p class="small text-muted mt-2">
-            Nota: O filtro de data nos KPIs de cobrança considera a Data de Emissão do Pedido (se disponível) ou a Data de Importação da Cobrança.
-            Para KPIs de pendências, considera a Data de Emissão da Pendente (se disponível) ou a Data de Importação da Pendente.
-            Para o gráfico de evolução, considera a data de importação (cobranças e pendências).
-        </p>
-    </div>
+        </div>
+    </form>
 </div>
 
 
-<div class="dashboard-section">
-    <h3 class="dashboard-section-title">Visão Geral dos Indicadores Chave (KPIs)</h3>
-    <div class="kpi-grid">
-        <div class="kpi-card">
-            <div class="kpi-icon-container"><i class="fas fa-percent fa-2x"></i></div>
-            <h4 class="kpi-title">Taxa de Cobranças Efetuadas</h4>
-            <p class="kpi-value">{{ kpis.taxa_cobranca_efetuada | default('N/D') }}%</p>
-            <p class="kpi-description">Percentagem de pedidos com status "Com cobrança" sobre o total de pedidos registados no período.</p>
+<div class="kpi-grid">
+    <div class="kpi-card">
+        <div class="icon"><i class="fas fa-percent"></i></div>
+        <div>
+            <h3>Taxa de Cobrança Efetuada</h3>
+            <p class="value">{{ kpis.taxa_cobranca_efetuada if kpis.taxa_cobranca_efetuada != 'N/D' else '0.00' }}<span class="unit">%</span></p>
         </div>
-        <div class="kpi-card">
-            <div class="kpi-icon-container"><i class="fas fa-exclamation-triangle fa-2x"></i></div>
-            <h4 class="kpi-title">Percentual para Verificar (Conformidade)</h4>
-            <p class="kpi-value">{{ kpis.percentual_nao_conforme | default('N/D') }}%</p>
-            <p class="kpi-description">Percentagem de pedidos com conformidade "Verificar" sobre o total de pedidos registados no período.</p>
+    </div>
+    <div class="kpi-card">
+        <div class="icon"><i class="fas fa-exclamation-triangle"></i></div>
+        <div>
+            <h3>% de Pedidos Não Conforme</h3>
+            <p class="value">{{ kpis.percentual_nao_conforme if kpis.percentual_nao_conforme != 'N/D' else '0.00' }}<span class="unit">%</span></p>
         </div>
-        <div class="kpi-card">
-            <div class="kpi-icon-container"><i class="fas fa-hourglass-half fa-2x"></i></div>
-            <h4 class="kpi-title">Tempo Médio de Resolução (Pendentes)</h4>
-            <p class="kpi-value">{{ kpis.tempo_medio_resolucao if kpis.tempo_medio_resolucao != 'N/D' else 'N/D' }} {% if kpis.tempo_medio_resolucao != 'N/D' and kpis.tempo_medio_resolucao is not none %}dias{% endif %}</p>
-            <p class="kpi-description">Tempo médio para finalizar pendências com datas de emissão e finalização válidas no período selecionado.</p> {# DESCRIÇÃO ATUALIZADA #}
+    </div>
+    <div class="kpi-card">
+        <div class="icon"><i class="fas fa-hourglass-half"></i></div>
+        <div>
+            <h3>Tempo Médio de Resolução (Pendências)</h3>
+            <p class="value">{{ kpis.tempo_medio_resolucao if kpis.tempo_medio_resolucao != 'N/D' else '0' }}<span class="unit">dias</span></p>
         </div>
-        <div class="kpi-card">
-            <div class="kpi-icon-container"><i class="fas fa-dollar-sign fa-2x"></i></div>
-            <h4 class="kpi-title">Valor Total de Pendências Ativas</h4>
-            <p class="kpi-value">{{ kpis.valor_total_pendencias | format_currency | default('N/D') }}</p>
-            <p class="kpi-description">Soma dos valores de todas as pendências com status "Pendente" no período.</p>
-            <a href="{{ url_for('relatorio_pendentes', filtro_status_pend='Pendente') }}" class="kpi-link">Ver pendências ativas <i class="fas fa-angle-right fa-xs"></i></a>
+    </div>
+    <div class="kpi-card">
+        <div class="icon"><i class="fas fa-wallet"></i></div>
+        <div>
+            <h3>Valor Total de Pendências Ativas</h3>
+            <p class="value">{{ kpis.valor_total_pendencias | format_currency }}</p>
         </div>
-        <div class="kpi-card placeholder">
-            <div class="kpi-icon-container"><i class="fas fa-tasks fa-2x"></i></div>
-            <h4 class="kpi-title">Pedidos por Status</h4>
-            <p class="kpi-value">Em Breve</p>
-            <p class="kpi-description">Distribuição de pedidos pelos diferentes status de cobrança.</p>
+    </div>
+    <div class="kpi-card">
+        <div class="icon"><i class="fas fa-gas-pump"></i></div>
+        <div>
+            <h3>Valor Investido em Abastecimentos</h3>
+            <p class="value">{{ kpis.get('valor_investido_abastecimento', 0.0) | format_currency }}</p>
         </div>
-        <div class="kpi-card placeholder">
-            <div class="kpi-icon-container"><i class="fas fa-calendar-check fa-2x"></i></div>
-            <h4 class="kpi-title">Pendências por Prazo</h4>
-            <p class="kpi-value">Em Breve</p>
-            <p class="kpi-description">Análise de pendências por data de vencimento ou criação.</p>
+    </div>
+    <div class="kpi-card">
+        <div class="icon"><i class="fas fa-boxes"></i></div>
+        <div>
+            <h3>Valor Investido em Estoque</h3>
+            <p class="value">{{ kpis.get('valor_investido_estoque', 0.0) | format_currency }}</p>
         </div>
     </div>
 </div>
 
-{# Secção para Gráficos (mantida) #}
-<div class="dashboard-section">
-    <h3 class="dashboard-section-title">Visualizações Gráficas</h3>
-    <div class="row">
-        <div class="col-md-6 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <h4>Evolução Mensal (Cobranças Lançadas vs Pendências Criadas)</h4>
-                </div>
-                <div class="card-body text-center">
-                    <canvas id="evolucaoChart" height="250"></canvas>
-                </div>
-            </div>
+<div class="row">
+    <div class="col-lg-7 mb-4">
+        <div class="chart-container">
+            <h4><i class="fas fa-chart-line"></i> Evolução (Cobranças vs Pendências)</h4>
+             {# MUDANÇA: Removido atributo height do canvas #}
+            <canvas id="evolucaoChart"></canvas> 
         </div>
-        <div class="col-md-6 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <h4>Distribuição de Status de Cobrança</h4>
-                </div>
-                <div class="card-body text-center">
-                    <canvas id="statusCobrancaChart" height="250"></canvas>
-                </div>
-            </div>
+    </div>
+    <div class="col-lg-5 mb-4">
+        <div class="chart-container">
+            <h4><i class="fas fa-chart-pie"></i> Distribuição de Status (Cobranças)</h4>
+             {# MUDANÇA: Removido atributo height do canvas #}
+            <canvas id="statusCobrancaChart"></canvas>
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block head_extra %}
-{{ super() }}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-<style>
-    .dashboard-section { margin-bottom: 2.5rem; }
-    .dashboard-section-title { font-size: 1.5rem; color: var(--text-color); margin-bottom: 1.5rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--accent-color-light); }
-    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
-    .kpi-card { background-color: var(--card-bg); border: 1px solid var(--card-border-color); border-radius: var(--border-radius-base); padding: 1.5rem; text-align: center; box-shadow: var(--box-shadow-sm); display: flex; flex-direction: column; align-items: center; transition: transform 0.2s ease-out, box-shadow 0.2s ease-out; }
-    .kpi-card:hover { transform: translateY(-4px); box-shadow: var(--card-hover-box-shadow); }
-    .kpi-card.placeholder { opacity: 0.7; border-style: dashed; }
-    .kpi-icon-container { color: var(--accent-color); margin-bottom: 1rem; background-color: var(--accent-color-light); border-radius: 50%; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; }
-    html[data-theme="noite"] .kpi-icon-container { background-color: var(--accent-color); }
-    html[data-theme="noite"] .kpi-icon-container i { color: var(--card-bg); }
-    .kpi-icon-container .fas, .kpi-icon-container .fab { font-size: 1.8rem; }
-    .kpi-title { font-size: 1.1rem; color: var(--text-color); margin-bottom: 0.5rem; font-weight: 600; min-height: 2.2em; }
-    .kpi-value { font-size: 2rem; font-weight: 700; color: var(--accent-color); line-height: 1.1; margin-bottom: 0.5rem; }
-    html[data-theme="noite"] .kpi-value { color: var(--accent-color); }
-    .kpi-description { font-size: 0.85rem; color: var(--text-muted-color); margin-bottom: 1rem; flex-grow: 1; min-height: 3em; }
-    .kpi-link { font-size: 0.8rem; color: var(--link-color); text-decoration: none; font-weight: 500; margin-top: auto; }
-    .kpi-link:hover { color: var(--link-hover-color); text-decoration: underline; }
-    .kpi-link .fa-xs { font-size: 0.8em; } 
-    .row { display: flex; flex-wrap: wrap; margin-right: -15px; margin-left: -15px; }
-    .col-md-6 { position: relative; width: 100%; padding-right: 15px; padding-left: 15px; }
-    @media (min-width: 768px) { .col-md-6 { flex: 0 0 50%; max-width: 50%; } }
-    .my-3 { margin-top: 1rem !important; margin-bottom: 1rem !important; }
-    .text-center .fas.fa-4x { font-size: 4em; } 
-    .filter-form .form-inline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; }
-    .filter-form .form-group { margin-bottom: 0; flex: 1 1 auto; min-width: 180px; }
-    .filter-form .form-group-actions { margin-left: auto; padding-top: 1.85rem; }
-</style>
 {% endblock %}
 
 {% block scripts_extra %}
 {{ super() }}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const ctxEvolucao = document.getElementById('evolucaoChart');
-        const ctxStatusCobranca = document.getElementById('statusCobrancaChart');
-
-        const chartData = {{ chart_data | tojson | safe }};
-        const evolucaoMeses = chartData.evolucao_meses || [];
-        const evolucaoCobrancas = chartData.evolucao_cobrancas || [];
-        const evolucaoPendencias = chartData.evolucao_pendencias || [];
-        const distStatusLabels = chartData.distribuicao_status_labels || [];
-        const distStatusValores = chartData.distribuicao_status_valores || [];
-
-        const rootStyles = getComputedStyle(document.documentElement);
-        const accentColor = rootStyles.getPropertyValue('--accent-color').trim();
-        const secondaryColor = rootStyles.getPropertyValue('--secondary-color').trim() || '#FF8C00';
-        const textColor = rootStyles.getPropertyValue('--text-color').trim();
-        const cardBgColor = rootStyles.getPropertyValue('--card-bg').trim();
-        const gridColor = rootStyles.getPropertyValue('--table-border-color').trim();
-
-        Chart.defaults.color = textColor;
-        Chart.defaults.borderColor = gridColor;
-
-        if (ctxEvolucao && evolucaoMeses.length > 0) {
-            new Chart(ctxEvolucao, {
-                type: 'line',
-                data: {
-                    labels: evolucaoMeses,
-                    datasets: [{
-                        label: 'Cobranças Lançadas', data: evolucaoCobrancas,
-                        borderColor: accentColor, backgroundColor: accentColor.replace(')', ', 0.2)'),
-                        fill: false, tension: 0.1
-                    }, {
-                        label: 'Pendências Criadas', data: evolucaoPendencias,
-                        borderColor: secondaryColor, backgroundColor: secondaryColor.replace(')', ', 0.2)'),
-                        fill: false, tension: 0.1
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false,
-                           scales: { y: { beginAtZero: true, ticks: { color: textColor }, grid: { color: gridColor } },
-                                     x: { ticks: { color: textColor }, grid: { color: gridColor } } },
-                           plugins: { legend: { labels: { color: textColor } } } }
-            });
-        } else if (ctxEvolucao) {
-            ctxEvolucao.parentElement.innerHTML = '<p class="text-muted text-center py-5">Dados de evolução não disponíveis para o período selecionado.</p>';
-        }
-
-        if (ctxStatusCobranca && distStatusLabels.length > 0 && distStatusValores.some(v => v > 0)) {
-            new Chart(ctxStatusCobranca, {
-                type: 'pie', 
-                data: {
-                    labels: distStatusLabels,
-                    datasets: [{
-                        label: 'Distribuição de Status', data: distStatusValores,
-                        backgroundColor: [ 
-                            accentColor, 
-                            rootStyles.getPropertyValue('--badge-warning-bg-L').trim() || '#FEF3C7',
-                            '#fd7e14', '#6f42c1' 
-                        ],
-                        borderColor: cardBgColor, borderWidth: 2
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false,
-                           plugins: { legend: { position: 'top', labels: { color: textColor } },
-                                      tooltip: { callbacks: { label: function(context) {
-                                          let label = context.label || ''; if (label) { label += ': '; }
-                                          if (context.parsed !== null) { label += context.parsed; } return label;
-                                      }}}
-                                    }
-                         }
-            });
-        } else if (ctxStatusCobranca) {
-            ctxStatusCobranca.parentElement.innerHTML = '<p class="text-muted text-center py-5">Dados de distribuição de status não disponíveis para o período selecionado.</p>';
-        }
+document.addEventListener('DOMContentLoaded', function () {
+    flatpickr(".flatpickr-input", {
+        dateFormat: "d/m/Y", 
+        altInput: true,      
+        altFormat: "Y-m-d",  
+        locale: "pt",        
+        allowInput: true     
     });
+
+    const chartData = {{ chart_data | tojson | safe }};
+    const rootStyles = getComputedStyle(document.documentElement);
+    const textColor = rootStyles.getPropertyValue('--text-color').trim();
+    const gridColor = rootStyles.getPropertyValue('--table-border-color').trim();
+    const accentColor = rootStyles.getPropertyValue('--accent-color').trim();
+    const secondaryColor = rootStyles.getPropertyValue('--secondary-color').trim() || '#FF8C00';
+
+    Chart.defaults.color = textColor;
+    Chart.defaults.borderColor = gridColor;
+
+    const evolucaoCtx = document.getElementById('evolucaoChart')?.getContext('2d');
+    if (evolucaoCtx && chartData.evolucao_meses && chartData.evolucao_meses.length > 0) {
+        const allEvolucaoData = [...(chartData.evolucao_cobrancas || []), ...(chartData.evolucao_pendencias || [])];
+        let maxEvolucaoValor = 0;
+        if (allEvolucaoData.length > 0) {
+            const numericData = allEvolucaoData.filter(val => typeof val === 'number' && isFinite(val));
+            if (numericData.length > 0) {
+                maxEvolucaoValor = Math.max(...numericData);
+            }
+        }
+        
+        let suggestedMaxEvolucao = 5; 
+        if (maxEvolucaoValor > 0) {
+            suggestedMaxEvolucao = Math.ceil(maxEvolucaoValor * 1.1); 
+            if (suggestedMaxEvolucao <= maxEvolucaoValor) { 
+                suggestedMaxEvolucao = maxEvolucaoValor + 1;
+            }
+            suggestedMaxEvolucao = Math.max(suggestedMaxEvolucao, 5);
+        }
+        let stepSizeY = (suggestedMaxEvolucao > 0 && suggestedMaxEvolucao <= 10 && maxEvolucaoValor > 0) ? 1 : undefined;
+
+
+        new Chart(evolucaoCtx, {
+            type: 'line', 
+            data: {
+                labels: chartData.evolucao_meses,
+                datasets: [{
+                    label: 'Cobranças Lançadas',
+                    data: chartData.evolucao_cobrancas,
+                    borderColor: accentColor,
+                    backgroundColor: accentColor.replace(')', ', 0.2)'), 
+                    fill: true, 
+                    tension: 0.2, 
+                    pointRadius: 4, 
+                    pointHoverRadius: 6 
+                }, {
+                    label: 'Pendências Criadas',
+                    data: chartData.evolucao_pendencias,
+                    borderColor: secondaryColor,
+                    backgroundColor: secondaryColor.replace(')', ', 0.2)'),
+                    fill: true,
+                    tension: 0.2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false, // Crucial para que a altura do container seja respeitada
+                scales: {
+                    y: { 
+                        beginAtZero: true,
+                        suggestedMax: suggestedMaxEvolucao,
+                        ticks: {
+                            color: textColor,
+                            precision: 0, 
+                            stepSize: stepSizeY, 
+                            callback: function(value) { 
+                                if (Number.isInteger(value)) { 
+                                    return value;
+                                }
+                            }
+                        },
+                        grid: { color: gridColor }
+                    },
+                    x: {
+                        ticks: { color: textColor },
+                        grid: { color: gridColor }
+                    }
+                },
+                plugins: { 
+                    legend: { 
+                        position: 'top',
+                        labels: { color: textColor }
+                    } 
+                },
+                elements: {
+                    line: {
+                        borderWidth: 2 
+                    }
+                }
+            }
+        });
+    } else if (evolucaoCtx) {
+        evolucaoCtx.canvas.parentElement.innerHTML = '<p class="text-muted text-center py-5">Dados de evolução não disponíveis para o período selecionado.</p>';
+    }
+
+    const distribuicaoCtx = document.getElementById('statusCobrancaChart')?.getContext('2d');
+    if (distribuicaoCtx && chartData.distribuicao_status_labels && chartData.distribuicao_status_labels.length > 0 && chartData.distribuicao_status_valores.some(v => v > 0)) {
+        new Chart(distribuicaoCtx, {
+            type: 'doughnut',
+            data: {
+                labels: chartData.distribuicao_status_labels,
+                datasets: [{
+                    label: 'Distribuição de Status',
+                    data: chartData.distribuicao_status_valores,
+                    backgroundColor: [
+                        accentColor.replace(')', ', 0.7)'), 
+                        rootStyles.getPropertyValue('--badge-warning-bg-L').trim() || '#FEF3C7',
+                        'rgba(255, 205, 86, 0.7)',
+                        'rgba(75, 192, 192, 0.7)',
+                        'rgba(153, 102, 255, 0.7)',
+                        'rgba(255, 159, 64, 0.7)'
+                    ],
+                    borderColor: 'var(--card-bg)', 
+                    borderWidth: 2,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false, // Permite que a altura do container seja usada
+                plugins: { 
+                    legend: { 
+                        position: 'top',
+                        labels: { color: textColor }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || '';
+                                if (label) { label += ': '; }
+                                if (context.parsed !== null) {
+                                    label += context.parsed;
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } else if (distribuicaoCtx) {
+         distribuicaoCtx.canvas.parentElement.innerHTML = '<p class="text-muted text-center py-5">Dados de distribuição de status não disponíveis para o período selecionado.</p>';
+    }
+});
 </script>
 {% endblock %}
