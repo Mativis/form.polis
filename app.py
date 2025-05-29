@@ -41,13 +41,14 @@ from utils.excel_processor import (
     get_kpi_tempo_medio_resolucao_pendencias,
     get_evolucao_mensal_cobrancas_pendencias,
     get_distribuicao_status_cobranca,
-    add_or_update_cobranca_manual # NOVA FUNÇÃO IMPORTADA
+    add_or_update_cobranca_manual,
+    get_pendentes_finalizadas_para_selecao, # Garantir que esta importação está correta
+    get_pendente_by_id_para_vinculo
 )
 
 app = Flask(__name__)
 
 # --- Configurações, Logging, DB Helpers, Flask-Login, Decoradores, Log Auditoria, Filtros Jinja ---
-# ... (código mantido como na versão anterior - ID: app_py_kpis_v1)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(32))
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['DATABASE'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'polis_database.db')
@@ -160,7 +161,7 @@ def home(): return render_template('home.html')
 @app.route('/mundo-os') 
 @login_required
 def mundo_os():
-    return render_template('mundo_os.html') # Botão voltar removido, não precisa de args
+    return render_template('mundo_os.html')
 def allowed_file(filename): return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 @app.route('/inserir-dados', methods=['GET', 'POST'])
 @login_required
@@ -325,19 +326,29 @@ def indicadores_desempenho():
 @app.route('/integrar-os', methods=['GET', 'POST'])
 @login_required
 def integrar_os():
+    form_data_manual = {} 
+    form_data_vincular = {}
+    # Busca pendentes finalizadas para ambos os formulários (se aplicável ao GET)
+    pendentes_finalizadas_lista = get_pendentes_finalizadas_para_selecao(app.config['DATABASE'])
+
     if request.method == 'POST':
-        if request.form.get('action') == 'add_os_manual':
+        action = request.form.get('action')
+        if action == 'add_os_manual':
             dados_cobranca = {
-                'pedido': request.form.get('pedido'),
-                'os': request.form.get('os'),
-                'placa': request.form.get('placa'),
-                'transportadora': request.form.get('transportadora'),
-                'status': request.form.get('status_cobranca'),
-                'conformidade': request.form.get('conformidade'),
-                'filial': request.form.get('filial'),
-                'data_emissao_pedido': request.form.get('data_emissao_pedido')
+                'pedido': request.form.get('pedido', '').strip(), 
+                'os': request.form.get('os', '').strip(),
+                'placa': request.form.get('placa', '').strip().upper(), 
+                'transportadora': request.form.get('transportadora', '').strip(),
+                'status': request.form.get('status_cobranca', '').strip(), 
+                'conformidade': request.form.get('conformidade', '').strip(),
+                'filial': request.form.get('filial', '').strip(),
+                'data_emissao_pedido': request.form.get('data_emissao_pedido', '').strip()
             }
-            if not all([dados_cobranca['pedido'], dados_cobranca['os'], dados_cobranca['placa'], dados_cobranca['filial'], dados_cobranca['transportadora'], dados_cobranca['status'], dados_cobranca['conformidade']]):
+            form_data_manual = dados_cobranca.copy() 
+
+            if not all([dados_cobranca['pedido'], dados_cobranca['os'], dados_cobranca['placa'], 
+                        dados_cobranca['filial'], dados_cobranca['transportadora'], 
+                        dados_cobranca['status'], dados_cobranca['conformidade']]):
                 flash("Todos os campos (exceto Data de Emissão do Pedido) são obrigatórios para adicionar OS manualmente.", "error")
             else:
                 success, message = add_or_update_cobranca_manual(dados_cobranca, app.config['DATABASE'])
@@ -345,16 +356,88 @@ def integrar_os():
                 if success:
                     log_audit("OS_INTEGRADA_MANUALMENTE", f"OS: {dados_cobranca['os']}, Pedido: {dados_cobranca['pedido']}")
                     return redirect(url_for('relatorio_cobrancas', filtro_os=dados_cobranca['os']))
-        # Adicionar lógica para "Vincular OS a Pedido Finalizado" aqui depois
-        # elif request.form.get('action') == 'vincular_os_pedido':
-        #     ...
-    return render_template('integrar_os.html')
+        
+        elif action == 'vincular_os_pendente':
+            id_pendente_selecionada = request.form.get('id_pendente_selecionada')
+            dados_nova_os = {
+                'os': request.form.get('os', '').strip(),
+                'placa': request.form.get('placa', '').strip().upper(),
+                'transportadora': request.form.get('transportadora', '').strip(),
+                'status_cobranca': request.form.get('status_cobranca', '').strip(),
+                'conformidade': request.form.get('conformidade', '').strip(),
+                'filial': request.form.get('filial', '').strip(),
+            }
+            form_data_vincular = dados_nova_os.copy()
+            form_data_vincular['id_pendente_selecionada'] = id_pendente_selecionada 
 
-@app.route('/abastecimento-estoque')
+            if not all([id_pendente_selecionada, dados_nova_os['os'], dados_nova_os['placa'], dados_nova_os['transportadora'], dados_nova_os['status_cobranca'], dados_nova_os['conformidade']]):
+                flash("Para vincular OS, selecione uma pendente finalizada e preencha todos os dados da nova OS.", "error")
+            else:
+                pendente_original = get_pendente_by_id_para_vinculo(id_pendente_selecionada, app.config['DATABASE'])
+                if not pendente_original or pendente_original['status'].lower() != 'finalizado':
+                    flash("Pendência selecionada não encontrada ou não está finalizada.", "error")
+                else:
+                    dados_cobranca_para_vincular = {
+                        'pedido': pendente_original['pedido_ref'],
+                        'os': dados_nova_os['os'],
+                        'placa': dados_nova_os['placa'],
+                        'transportadora': dados_nova_os['transportadora'],
+                        'status': dados_nova_os['status_cobranca'],
+                        'conformidade': dados_nova_os['conformidade'],
+                        'filial': dados_nova_os['filial'] if dados_nova_os['filial'] else pendente_original['filial'],
+                        'data_emissao_pedido': pendente_original['data_emissao'] 
+                    }
+                    success, message = add_or_update_cobranca_manual(dados_cobranca_para_vincular, app.config['DATABASE'])
+                    flash(message, "success" if success else "error")
+                    if success:
+                        log_audit("OS_VINCULADA_A_PENDENTE", f"Pendente ID: {id_pendente_selecionada}, Pedido: {pendente_original['pedido_ref']}, Nova OS: {dados_nova_os['os']}")
+                        return redirect(url_for('relatorio_cobrancas', filtro_pedido=pendente_original['pedido_ref'], filtro_os=dados_nova_os['os']))
+    
+    return render_template('integrar_os.html', 
+                           form_data_manual=form_data_manual, 
+                           form_data_vincular=form_data_vincular,
+                           pendentes_finalizadas_lista=pendentes_finalizadas_lista)
+
+@app.route('/abastecimento-estoque', methods=['GET', 'POST'])
 @login_required
 def abastecimento_estoque():
-    # Lógica futura para esta página
-    return render_template('abastecimento_estoque.html')
+    form_data = {}
+    pendentes_finalizadas_lista = get_pendentes_finalizadas_para_selecao(app.config['DATABASE'])
+
+    if request.method == 'POST':
+        id_pendente_selecionada = request.form.get('id_pendente_selecionada')
+        categoria_custo = request.form.get('categoria_custo') 
+        placa_opcional = request.form.get('placa', '').strip().upper() or "N/A"
+        filial_opcional = request.form.get('filial', '').strip()
+
+        form_data = request.form.to_dict() 
+
+        if not id_pendente_selecionada or not categoria_custo:
+            flash("Selecione um Pedido Finalizado e uma Categoria de Custo.", "error")
+        else:
+            pendente_original = get_pendente_by_id_para_vinculo(id_pendente_selecionada, app.config['DATABASE'])
+            if not pendente_original or pendente_original['status'].lower() != 'finalizado':
+                flash("Pendência selecionada não encontrada ou não está finalizada.", "error")
+            else:
+                dados_cobranca = {
+                    'pedido': pendente_original['pedido_ref'],
+                    'os': categoria_custo, 
+                    'placa': placa_opcional,
+                    'transportadora': "TRANSAC TRANSPORTE ROD. LTDA",
+                    'status': "Com cobrança",
+                    'conformidade': "Conforme", 
+                    'filial': filial_opcional if filial_opcional else pendente_original['filial'],
+                    'data_emissao_pedido': pendente_original['data_emissao']
+                }
+                success, message = add_or_update_cobranca_manual(dados_cobranca, app.config['DATABASE'])
+                flash(message, "success" if success else "error")
+                if success:
+                    log_audit(f"CUSTO_LANCADO_{categoria_custo.upper()}", f"Pedido: {pendente_original['pedido_ref']}, OS: {categoria_custo}")
+                    return redirect(url_for('relatorio_cobrancas', filtro_pedido=pendente_original['pedido_ref'], filtro_os=categoria_custo))
+    
+    return render_template('abastecimento_estoque.html', 
+                           pendentes_finalizadas_lista=pendentes_finalizadas_lista,
+                           form_data=form_data)
 
 
 # --- CRUD para Cobranças ---

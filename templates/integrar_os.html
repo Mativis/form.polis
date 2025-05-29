@@ -14,89 +14,226 @@
     </div>
     <div class="card-body">
         <p class="text-muted small">Preencha os campos abaixo para adicionar uma nova Ordem de Serviço ao sistema de cobranças.</p>
-        <form method="POST" action="{{ url_for('integrar_os') }}"> {# Ação do formulário aponta para a própria rota #}
+        <form method="POST" action="{{ url_for('integrar_os') }}"> 
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-            <input type="hidden" name="action" value="add_os_manual"/> {# Para identificar a ação no backend #}
+            <input type="hidden" name="action" value="add_os_manual"/> 
 
             <div class="form-row">
                 <div class="form-group col-md-6">
-                    <label for="pedido">Pedido Vinculado:</label>
-                    <input type="text" id="pedido" name="pedido" class="form-control" value="{{ request.form.pedido or '' }}" placeholder="Nº do Pedido a que esta OS pertence" required>
+                    <label for="manual_pedido">Pedido Vinculado: <span class="text-danger">*</span></label>
+                    <input type="text" id="manual_pedido" name="pedido" class="form-control" value="{{ form_data_manual.pedido or '' }}" placeholder="Nº do Pedido" required>
                 </div>
                 <div class="form-group col-md-6">
-                    <label for="os">Número da OS:</label>
-                    <input type="text" id="os" name="os" class="form-control" value="{{ request.form.os or '' }}" placeholder="Nº da Ordem de Serviço" required>
+                    <label for="manual_os">Número da OS: <span class="text-danger">*</span></label>
+                    <input type="text" id="manual_os" name="os" class="form-control" value="{{ form_data_manual.os or '' }}" placeholder="Nº da OS" required>
                 </div>
             </div>
-
             <div class="form-row">
                 <div class="form-group col-md-6">
-                    <label for="placa">Placa do Veículo:</label>
-                    <input type="text" id="placa" name="placa" class="form-control" value="{{ request.form.placa or '' }}" placeholder="XXX-0000 ou XXX0X00" required>
+                    <label for="manual_placa">Placa: <span class="text-danger">*</span></label>
+                    <input type="text" id="manual_placa" name="placa" class="form-control" value="{{ form_data_manual.placa or '' }}" placeholder="XXX-0000 ou XXX0X00" required>
                 </div>
                 <div class="form-group col-md-6">
-                    <label for="filial">Filial:</label>
-                    <input type="text" id="filial" name="filial" class="form-control" value="{{ request.form.filial or '' }}" placeholder="Nome ou código da filial" required>
+                    <label for="manual_filial">Filial: <span class="text-danger">*</span></label>
+                    <input type="text" id="manual_filial" name="filial" class="form-control" value="{{ form_data_manual.filial or '' }}" placeholder="Nome ou código da filial" required>
                 </div>
             </div>
-            
             <div class="form-group">
-                <label for="transportadora">Transportadora:</label>
-                <input type="text" id="transportadora" name="transportadora" class="form-control" value="{{ request.form.transportadora or '' }}" placeholder="Nome da transportadora" required>
+                <label for="manual_transportadora">Transportadora: <span class="text-danger">*</span></label>
+                <input type="text" id="manual_transportadora" name="transportadora" class="form-control" value="{{ form_data_manual.transportadora or '' }}" placeholder="Nome da transportadora" required>
             </div>
-
             <div class="form-row">
                 <div class="form-group col-md-6">
-                    <label for="status_cobranca">Status da Cobrança:</label>
-                    <select id="status_cobranca" name="status_cobranca" class="form-control" required>
+                    <label for="manual_status_cobranca">Status da Cobrança: <span class="text-danger">*</span></label>
+                    <select id="manual_status_cobranca" name="status_cobranca" class="form-control" required>
                         <option value="">Selecione...</option>
-                        <option value="Com cobrança" {% if request.form.status_cobranca == 'Com cobrança' %}selected{% endif %}>Com cobrança</option>
-                        <option value="Sem cobrança" {% if request.form.status_cobranca == 'Sem cobrança' %}selected{% endif %}>Sem cobrança</option>
+                        <option value="Com cobrança" {% if form_data_manual.status == 'Com cobrança' %}selected{% endif %}>Com cobrança</option>
+                        <option value="Sem cobrança" {% if form_data_manual.status == 'Sem cobrança' %}selected{% endif %}>Sem cobrança</option>
                     </select>
                 </div>
                 <div class="form-group col-md-6">
-                    <label for="conformidade">Conformidade:</label>
-                    <select id="conformidade" name="conformidade" class="form-control" required>
+                    <label for="manual_conformidade">Conformidade: <span class="text-danger">*</span></label>
+                    <select id="manual_conformidade" name="conformidade" class="form-control" required>
                         <option value="">Selecione...</option>
-                        <option value="Conforme" {% if request.form.conformidade == 'Conforme' %}selected{% endif %}>Conforme</option>
-                        <option value="Verificar" {% if request.form.conformidade == 'Verificar' %}selected{% endif %}>Verificar</option>
+                        <option value="Conforme" {% if form_data_manual.conformidade == 'Conforme' %}selected{% endif %}>Conforme</option>
+                        <option value="Verificar" {% if form_data_manual.conformidade == 'Verificar' %}selected{% endif %}>Verificar</option>
                     </select>
                 </div>
             </div>
-            
             <div class="form-group">
-                <label for="data_emissao_pedido">Data de Emissão do Pedido (Opcional):</label>
-                <input type="date" id="data_emissao_pedido" name="data_emissao_pedido" class="form-control" value="{{ request.form.data_emissao_pedido or '' }}">
+                <label for="manual_data_emissao_pedido">Data de Emissão do Pedido (Opcional):</label>
+                <input type="date" id="manual_data_emissao_pedido" name="data_emissao_pedido" class="form-control" value="{{ form_data_manual.data_emissao_pedido or '' }}">
                 <small class="text-muted">Se não informada, o sistema tentará buscar da tabela de pendências, se o pedido existir lá.</small>
             </div>
-
             <div class="form-group mt-4">
                 <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Adicionar OS</button>
-                <a href="{{ url_for('home') }}" class="btn btn-secondary">Cancelar</a> {# Botão Cancelar volta para Home #}
+                <a href="{{ url_for('home') }}" class="btn btn-secondary">Cancelar</a>
             </div>
         </form>
     </div>
 </div>
 
-{# Secção para Vincular OS a Pedido Finalizado (Placeholder da funcionalidade) #}
+<hr class="my-5">
+
+{# Secção para Vincular OS a Pedido Finalizado #}
 <div class="card mt-4">
     <div class="card-header">
-        <h3><i class="fas fa-link"></i> Vincular OS a Pedido Finalizado e Transferir para Cobranças</h3>
+        <h3><i class="fas fa-link"></i> Vincular Nova OS a Pedido Finalizado (de Pendências)</h3>
     </div>
     <div class="card-body">
-        <p class="text-muted">Funcionalidade para selecionar um pedido finalizado (da tabela de pendências) e associar uma nova OS, criando um registo em cobranças.</p>
-        <p class="text-info"><i class="fas fa-info-circle"></i> Esta funcionalidade será implementada numa próxima etapa.</p>
-        {# Aqui viria a interface para selecionar pedido de pendentes e inserir dados da OS #}
+        <p class="text-muted small">Selecione um pedido da lista de pendências com status "Finalizado" e preencha os dados da nova OS a ser criada e associada a ele. A "Data de Emissão do Pedido" para a nova cobrança será automaticamente preenchida com a data de emissão da pendência selecionada.</p>
+        
+        <form method="POST" action="{{ url_for('integrar_os') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="action" value="vincular_os_pendente"/>
+
+            <div class="form-group">
+                <label for="id_pendente_selecionada">Selecione o Pedido Finalizado (de Pendências): <span class="text-danger">*</span></label>
+                <select id="id_pendente_selecionada" name="id_pendente_selecionada" class="form-control" required>
+                    <option value="">Selecione um Pedido...</option>
+                    {% for pendente in pendentes_finalizadas_lista %} {# A variável passada pela rota deve ser esta #}
+                        <option value="{{ pendente.id }}" 
+                                data-pedido_ref="{{ pendente.pedido_ref }}"
+                                data-data_emissao="{{ pendente.data_emissao or '' }}" 
+                                data-filial="{{ pendente.filial or 'N/A' }}">
+                            {{ pendente.pedido_ref }} (Filial: {{pendente.filial or 'N/A'}}, Emitido em: {{ pendente.data_emissao | format_date_br or 'N/A' }})
+                        </option>
+                    {% endfor %}
+                </select>
+                {% if not pendentes_finalizadas_lista %}
+                    <small class="text-warning d-block mt-1">Nenhuma pendência com status "Finalizado" encontrada para seleção.</small>
+                {% endif %}
+            </div>
+            
+            {# Campos para exibir dados da pendente selecionada (apenas visual) #}
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="vinc_pedido_ref_display">Pedido Ref. da Pendência:</label>
+                    <input type="text" id="vinc_pedido_ref_display" class="form-control" readonly disabled>
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="vinc_data_emissao_display">Data Emissão da Pendência:</label>
+                    <input type="text" id="vinc_data_emissao_display" class="form-control" readonly disabled>
+                </div>
+            </div>
+            
+            <hr>
+            <h4 class="mb-3 mt-3">Dados da Nova OS a ser Criada:</h4>
+
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="vinc_os">Número da Nova OS: <span class="text-danger">*</span></label>
+                    <input type="text" id="vinc_os" name="os" class="form-control" value="{{ form_data_vincular.os or '' }}" placeholder="Nº da Nova OS" required>
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="vinc_placa">Placa: <span class="text-danger">*</span></label>
+                    <input type="text" id="vinc_placa" name="placa" class="form-control" value="{{ form_data_vincular.placa or '' }}" placeholder="XXX-0000 ou XXX0X00" required>
+                </div>
+            </div>
+             <div class="form-group">
+                <label for="vinc_transportadora">Transportadora: <span class="text-danger">*</span></label>
+                <input type="text" id="vinc_transportadora" name="transportadora" class="form-control" value="{{ form_data_vincular.transportadora or '' }}" placeholder="Nome da transportadora" required>
+            </div>
+            <div class="form-row">
+                 <div class="form-group col-md-4">
+                    <label for="vinc_filial">Filial da OS (Opcional):</label>
+                    <input type="text" id="vinc_filial" name="filial" class="form-control" value="{{ form_data_vincular.filial or '' }}" placeholder="Default: Filial da Pendente">
+                     <small class="text-muted">Se em branco, usará a filial da pendência selecionada.</small>
+                </div>
+                <div class="form-group col-md-4">
+                    <label for="vinc_status_cobranca">Status da Cobrança: <span class="text-danger">*</span></label>
+                    <select id="vinc_status_cobranca" name="status_cobranca" class="form-control" required>
+                        <option value="Com cobrança" selected>Com cobrança</option>
+                        <option value="Sem cobrança">Sem cobrança</option>
+                    </select>
+                </div>
+                <div class="form-group col-md-4">
+                    <label for="vinc_conformidade">Conformidade: <span class="text-danger">*</span></label>
+                    <select id="vinc_conformidade" name="conformidade" class="form-control" required>
+                        <option value="Conforme" selected>Conforme</option>
+                        <option value="Verificar">Verificar</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group mt-4">
+                <button type="submit" class="btn btn-primary" {% if not pendentes_finalizadas_lista %}disabled{% endif %}>
+                    <i class="fas fa-link"></i> Vincular OS e Criar Cobrança
+                </button>
+            </div>
+        </form>
     </div>
 </div>
-
 {% endblock %}
 
 {% block head_extra %}
 {{ super() }}
 <style>
     .form-row { display: flex; flex-wrap: wrap; margin-right: -7.5px; margin-left: -7.5px; }
-    .form-row > .col-md-6 { padding-right: 7.5px; padding-left: 7.5px; flex: 0 0 50%; max-width: 50%; }
-    @media (max-width: 768px) { .form-row > .col-md-6 { flex: 0 0 100%; max-width: 100%; } }
+    .form-row > .col-md-4, .form-row > .col-md-6 { padding-right: 7.5px; padding-left: 7.5px; }
+    .form-row > .col-md-6 { flex: 0 0 50%; max-width: 50%; }
+    .form-row > .col-md-4 { flex: 0 0 33.3333%; max-width: 33.3333%; }
+    @media (max-width: 768px) { 
+        .form-row > .col-md-6, .form-row > .col-md-4 { flex: 0 0 100%; max-width: 100%; } 
+    }
+    .text-danger { color: var(--flash-error-text-L); }
+    html[data-theme="noite"] .text-danger { color: var(--flash-error-text-D); }
 </style>
+{% endblock %}
+
+{% block scripts_extra %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectPendente = document.getElementById('id_pendente_selecionada');
+    const pedidoRefDisplay = document.getElementById('vinc_pedido_ref_display');
+    const dataEmissaoDisplay = document.getElementById('vinc_data_emissao_display');
+    const filialInput = document.getElementById('vinc_filial'); // Input para filial da OS a ser criada
+
+    if (selectPendente) {
+        selectPendente.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption && selectedOption.value) {
+                const pedidoRef = selectedOption.dataset.pedido_ref;
+                const dataEmissao = selectedOption.dataset.data_emissao; // Formato YYYY-MM-DD HH:MM:SS
+                const filialPendente = selectedOption.dataset.filial;
+
+                if(pedidoRefDisplay) pedidoRefDisplay.value = pedidoRef || 'N/A';
+                
+                if(dataEmissaoDisplay) {
+                    if (dataEmissao) {
+                        try {
+                            const datePart = dataEmissao.split(' ')[0];
+                            const [year, month, day] = datePart.split('-');
+                            dataEmissaoDisplay.value = `${day}/${month}/${year}`;
+                        } catch (e) {
+                            dataEmissaoDisplay.value = dataEmissao; // Fallback
+                        }
+                    } else {
+                        dataEmissaoDisplay.value = 'N/A';
+                    }
+                }
+                
+                if(filialInput) {
+                    // Preenche o campo de filial da OS com a filial da pendente por padrão
+                    // O usuário pode alterar se quiser.
+                    filialInput.value = filialPendente && filialPendente !== 'N/A' ? filialPendente : '';
+                    filialInput.placeholder = filialPendente && filialPendente !== 'N/A' ? `Default: ${filialPendente}` : 'Filial da OS';
+                }
+
+            } else { // "Selecione um Pedido..."
+                if(pedidoRefDisplay) pedidoRefDisplay.value = '';
+                if(dataEmissaoDisplay) dataEmissaoDisplay.value = '';
+                if(filialInput) {
+                    filialInput.value = '';
+                    filialInput.placeholder = 'Filial da OS';
+                }
+            }
+        });
+        // Disparar change no carregamento da página se um valor já estiver selecionado
+        if (selectPendente.value) {
+             selectPendente.dispatchEvent(new Event('change'));
+        }
+    }
+});
+</script>
 {% endblock %}

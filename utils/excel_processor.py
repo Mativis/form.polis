@@ -140,25 +140,25 @@ def processar_excel_cobrancas(file_path, file_extension, db_name):
         cursor.execute("SELECT pedido_ref, data_emissao FROM pendentes WHERE data_emissao IS NOT NULL")
         datas_emissao_pendentes = {row['pedido_ref']: row['data_emissao'] for row in cursor.fetchall()}
         
-        for _, row in df_final.iterrows():
-            pedido = str(row.get('pedido', '')).strip(); os_val = str(row.get('os', '')).strip()
+        for _, row_data_frame in df_final.iterrows(): 
+            pedido = str(row_data_frame.get('pedido', '')).strip(); os_val = str(row_data_frame.get('os', '')).strip()
             if not pedido or not os_val: ignorados += 1; continue
             
             cursor.execute("SELECT id, data_emissao_pedido FROM cobrancas WHERE pedido = ? AND os = ?", (pedido, os_val))
-            existing_record = cursor.fetchone()
+            existing_record = cursor.fetchone() 
             
             dt_utc = datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
-            status_final = row.get('status_categorizado'); conformidade_final = row.get('conformidade_categorizada')
+            status_final = row_data_frame.get('status_categorizado'); conformidade_final = row_data_frame.get('conformidade_categorizada')
             data_emissao_pedido_val = datas_emissao_pendentes.get(pedido) 
             
             if existing_record and existing_record['data_emissao_pedido'] and data_emissao_pedido_val: 
                 data_emissao_pedido_val = existing_record['data_emissao_pedido']
             
-            dados_insert = (pedido, os_val, str(row.get('filial','')).strip(), str(row.get('placa','')).strip(), 
-                            str(row.get('transportadora','')).strip(), conformidade_final, status_final, 
+            dados_insert = (pedido, os_val, str(row_data_frame.get('filial','')).strip(), str(row_data_frame.get('placa','')).strip(), 
+                            str(row_data_frame.get('transportadora','')).strip(), conformidade_final, status_final, 
                             data_emissao_pedido_val, dt_utc)
-            dados_update = (str(row.get('filial','')).strip(), str(row.get('placa','')).strip(), 
-                            str(row.get('transportadora','')).strip(), conformidade_final, status_final, 
+            dados_update = (str(row_data_frame.get('filial','')).strip(), str(row_data_frame.get('placa','')).strip(), 
+                            str(row_data_frame.get('transportadora','')).strip(), conformidade_final, status_final, 
                             data_emissao_pedido_val, dt_utc, pedido, os_val)
             try:
                 if existing_record: 
@@ -229,10 +229,10 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
         logger.warning("Limpando tabela 'pendentes'."); cursor.execute("DELETE FROM pendentes")
         adicionados, ignorados, atualizacoes_cobrancas = 0,0,0
         
-        for index, row in mapped_df.iterrows():
-            pedido_ref = str(row.get('pedido_ref','')).strip(); valor_s = str(row.get('valor','')).strip()
-            data_emissao_str = str(row.get('data_emissao_original', '')).strip()
-            data_finalizacao_real_str = str(row.get('data_finalizacao_original', '')).strip()
+        for index, row_data_frame in mapped_df.iterrows(): 
+            pedido_ref = str(row_data_frame.get('pedido_ref','')).strip(); valor_s = str(row_data_frame.get('valor','')).strip()
+            data_emissao_str = str(row_data_frame.get('data_emissao_original', '')).strip()
+            data_finalizacao_real_str = str(row_data_frame.get('data_finalizacao_original', '')).strip()
 
             data_emissao_db = format_date_for_db(data_emissao_str) if data_emissao_str else None
             data_finalizacao_real_db = format_date_for_db(data_finalizacao_real_str) if data_finalizacao_real_str else None
@@ -241,13 +241,13 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
             try: val_f = float(valor_s.replace('R$','').strip().replace('.','').replace(',','.'))
             except ValueError: ignorados+=1; continue
             
-            status_orig = str(row.get('status','Pendente')).strip() or 'Pendente'
+            status_orig = str(row_data_frame.get('status','Pendente')).strip() or 'Pendente'
             status_final = "Finalizado" if data_finalizacao_real_db else status_orig 
             if normalize_column_name_generic(status_orig) in ["nao_finalizado", "nao finalizado", "em_aberto", "aberto"] and not data_finalizacao_real_db:
                 status_final = "Pendente"
 
-            dados_pendente = (pedido_ref, str(row.get('fornecedor','N/A')).strip() or 'N/A', 
-                              str(row.get('filial','N/A')).strip() or 'N/A', 
+            dados_pendente = (pedido_ref, str(row_data_frame.get('fornecedor','N/A')).strip() or 'N/A', 
+                              str(row_data_frame.get('filial','N/A')).strip() or 'N/A', 
                               val_f, status_final, 
                               data_emissao_db, 
                               data_finalizacao_real_db, 
@@ -311,6 +311,45 @@ def get_pendentes(filtros=None, db_name='polis_database.db'):
     except sqlite3.Error as e: logger.error(f"Erro SQL buscar pendências: {e}"); return []
     finally:
         if conn: conn.close()
+
+def get_pendente_by_id_para_vinculo(pendente_id, db_name='polis_database.db'): 
+    conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id, pedido_ref, data_emissao, filial, status FROM pendentes WHERE id = ?", (pendente_id,))
+        return cursor.fetchone()
+    except sqlite3.Error as e:
+        logger.error(f"Erro SQL ao buscar pendente por ID ({pendente_id}) para vínculo: {e}")
+        return None
+    finally:
+        if conn: conn.close()
+
+def get_pendentes_finalizadas_para_selecao(db_name='polis_database.db'):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_name)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT p.id, p.pedido_ref, p.filial, p.data_emissao 
+            FROM pendentes p
+            LEFT JOIN cobrancas c ON p.pedido_ref = c.pedido 
+            WHERE LOWER(TRIM(p.status)) = LOWER('finalizado')
+              AND c.pedido IS NULL  -- Garante que o pedido_ref da pendente não existe como pedido em cobranças
+            ORDER BY p.pedido_ref ASC
+        """
+        # Se quiser permitir vincular mesmo que já exista uma OS para o pedido, mas não ESTA OS específica,
+        # a lógica de filtro precisaria ser mais complexa ou feita no app.py.
+        # Por agora, estamos a excluir qualquer pedido_ref que já tenha *qualquer* entrada em cobrancas.
+
+        cursor.execute(query)
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        logger.error(f"Erro SQL ao buscar pendentes finalizadas para seleção: {e}")
+        return []
+    finally:
+        if conn: conn.close()
+
 
 def get_distinct_values(column_name, table_name, db_name='polis_database.db'):
     conn = sqlite3.connect(db_name); cursor = conn.cursor()
@@ -428,7 +467,7 @@ def get_os_status_por_filial(status_desejado, db_name, data_de=None, data_ate=No
         if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        query = f"SELECT filial, COUNT(DISTINCT os) as count_os FROM cobrancas WHERE LOWER(status) = LOWER(?) AND filial IS NOT NULL AND TRIM(filial) != '' {date_filter_sql} GROUP BY filial ORDER BY count_os DESC, filial ASC"
+        query = f"SELECT filial, COUNT(DISTINCT os) as count_os FROM cobrancas WHERE LOWER(status) = LOWER(?) AND filial IS NOT NULL AND TRIM(filial) != '' {date_filter_sql} GROUP BY filial ORDER BY count_pedidos DESC, filial ASC"
         cursor.execute(query, (status_desejado.lower(), *date_params)); return cursor.fetchall()
     except sqlite3.Error as e: logger.error(f"Erro SQL OS status por filial '{status_desejado}': {e}"); return []
     finally:
@@ -717,7 +756,7 @@ def delete_pendencia_db(pendencia_id, db_name):
     finally:
         if conn: conn.close()
 
-# NOVA FUNÇÃO PARA ADICIONAR/ATUALIZAR COBRANÇA MANUALMENTE (OS)
+# FUNÇÃO PARA ADICIONAR/ATUALIZAR COBRANÇA MANUALMENTE (OS)
 def add_or_update_cobranca_manual(data, db_name):
     conn = None
     try:
@@ -725,55 +764,62 @@ def add_or_update_cobranca_manual(data, db_name):
         conn.row_factory = sqlite3.Row 
         cursor = conn.cursor()
 
-        pedido = data.get('pedido')
-        os_val = data.get('os')
+        pedido = str(data.get('pedido','')).strip()
+        os_val = str(data.get('os','')).strip()
 
         if not pedido or not os_val:
             return False, "Pedido e OS são obrigatórios."
 
         data_emissao_pedido_db = None
-        if data.get('data_emissao_pedido'):
+        if data.get('data_emissao_pedido') and str(data.get('data_emissao_pedido')).strip():
             data_emissao_pedido_db = format_date_for_db(data.get('data_emissao_pedido'))
             if not data_emissao_pedido_db:
-                logger.warning(f"Data de emissão do pedido '{data.get('data_emissao_pedido')}' inválida para OS manual.")
+                logger.warning(f"Data de emissão do pedido '{data.get('data_emissao_pedido')}' inválida para OS manual. Será ignorada.")
         
         if not data_emissao_pedido_db: 
             cursor.execute("SELECT data_emissao FROM pendentes WHERE pedido_ref = ? AND data_emissao IS NOT NULL", (pedido,))
             pendente_data = cursor.fetchone()
             if pendente_data:
-                data_emissao_pedido_db = pendente_data['data_emissao']
+                data_emissao_pedido_db = pendente_data['data_emissao'] 
+                logger.info(f"Data de emissão '{data_emissao_pedido_db}' obtida da pendente para o pedido {pedido}.")
         
         cursor.execute("SELECT id, data_emissao_pedido FROM cobrancas WHERE pedido = ? AND os = ?", (pedido, os_val))
         existing_record = cursor.fetchone()
         
         data_importacao_utc = datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
+        
+        status_cobranca_manual = categorizar_status_cobranca(data.get('status'))
+        conformidade_manual = categorizar_conformidade(data.get('conformidade'))
+
 
         if existing_record:
-            data_emissao_pedido_val_final = existing_record['data_emissao_pedido'] # Prioriza data existente
-            if not data_emissao_pedido_val_final and data_emissao_pedido_db: # Se não havia, usa a nova
+            data_emissao_pedido_val_final = existing_record['data_emissao_pedido'] 
+            if not data_emissao_pedido_val_final and data_emissao_pedido_db: 
                 data_emissao_pedido_val_final = data_emissao_pedido_db
-            # Se quiser que a nova data sempre sobrescreva, use: data_emissao_pedido_val_final = data_emissao_pedido_db or existing_record['data_emissao_pedido']
-
+            elif data.get('data_emissao_pedido') and data_emissao_pedido_db: 
+                 data_emissao_pedido_val_final = data_emissao_pedido_db
 
             cursor.execute("""
                 UPDATE cobrancas 
                 SET filial=?, placa=?, transportadora=?, status=?, conformidade=?, 
                     data_emissao_pedido=?, data_importacao=?
                 WHERE id=?
-            """, (data.get('filial'), data.get('placa'), data.get('transportadora'), 
-                  data.get('status'), data.get('conformidade'), data_emissao_pedido_val_final,
-                  data_importacao_utc, existing_record['id']))
+            """, (str(data.get('filial','')).strip(), str(data.get('placa','')).strip().upper(), 
+                  str(data.get('transportadora','')).strip(), status_cobranca_manual, conformidade_manual, 
+                  data_emissao_pedido_val_final, data_importacao_utc, existing_record['id']))
             conn.commit()
+            logger.info(f"Cobrança atualizada: Pedido {pedido}, OS {os_val}")
             return True, f"Cobrança para OS {os_val} (Pedido {pedido}) atualizada com sucesso."
         else:
             cursor.execute("""
                 INSERT INTO cobrancas 
                 (pedido, os, placa, transportadora, status, conformidade, filial, data_emissao_pedido, data_importacao)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (pedido, os_val, data.get('placa'), data.get('transportadora'),
-                  data.get('status'), data.get('conformidade'), data.get('filial'),
-                  data_emissao_pedido_db, data_importacao_utc))
+            """, (pedido, os_val, str(data.get('placa','')).strip().upper(), 
+                  str(data.get('transportadora','')).strip(), status_cobranca_manual, conformidade_manual,
+                  str(data.get('filial','')).strip(), data_emissao_pedido_db, data_importacao_utc))
             conn.commit()
+            logger.info(f"Nova cobrança adicionada: Pedido {pedido}, OS {os_val}")
             return True, f"Nova cobrança para OS {os_val} (Pedido {pedido}) adicionada com sucesso."
 
     except sqlite3.Error as e:
