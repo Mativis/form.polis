@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- Funções de Normalização e Auxiliares ---
+# --- Funções de Normalização e Auxiliares (mantidas) ---
 def normalize_column_name_generic(col_name, prefix="col_desconhecida"):
     if pd.isna(col_name) or col_name is None:
         return f"{prefix}_{str(abs(hash(str(datetime.now()))))}"
@@ -76,10 +76,18 @@ def format_date_for_db(date_string_or_dt):
     return None
 
 def format_date_for_query(date_string_or_dt): 
-    formatted_date = format_date_for_db(date_string_or_dt) 
-    if formatted_date:
-        return formatted_date.split(' ')[0] 
+    if not date_string_or_dt: return None
+    if isinstance(date_string_or_dt, datetime):
+        return date_string_or_dt.strftime('%Y-%m-%d')
+    elif isinstance(date_string_or_dt, str):
+        try:
+            dt_obj = datetime.strptime(date_string_or_dt, '%Y-%m-%d') 
+            return dt_obj.strftime('%Y-%m-%d')
+        except ValueError:
+            logger.warning(f"Não foi possível converter a string de data do filtro '{date_string_or_dt}' para o formato YYYY-MM-DD.")
+            return None
     return None
+
 
 def categorizar_status_cobranca(status_original):
     if not status_original or pd.isna(status_original): return "Sem cobrança" 
@@ -208,8 +216,9 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
 
         if not col_pedido_ref: missing_mandatory.append("'Pedido Ref.' (ID)")
         if not col_valor: missing_mandatory.append("'Valor'")
-        if not col_data_emissao: logger.warning("Coluna para 'Data de Emissão' (ex: data_emissao) não encontrada na planilha de Pendentes. Será guardada como Nula.")
-        if not col_data_finalizacao_real: logger.warning("Coluna para 'Data de Finalização' (ex: data_finalizacao) não encontrada na planilha de Pendentes. Será guardada como Nula.")
+        # Não são mais estritamente obrigatórias, mas avisaremos se não encontradas
+        if not col_data_emissao: logger.warning("Coluna para 'Data de Emissão' (ex: data_emissao) não encontrada na planilha de Pendentes. Será guardada como Nula se não existir no BD.")
+        if not col_data_finalizacao_real: logger.warning("Coluna para 'Data de Finalização' (ex: data_finalizacao) não encontrada na planilha de Pendentes. Será guardada como Nula se não existir no BD.")
 
         if missing_mandatory: msg = f"Colunas obrigatórias faltando em Pendências: {', '.join(missing_mandatory)}. Disponíveis: {original_columns}."; logger.error(msg); return False, msg
         
@@ -226,43 +235,74 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
         conn = sqlite3.connect(db_name); 
         conn.row_factory = sqlite3.Row 
         cursor = conn.cursor()
-        logger.warning("Limpando tabela 'pendentes'."); cursor.execute("DELETE FROM pendentes")
-        adicionados, ignorados, atualizacoes_cobrancas = 0,0,0
+        
+        # MUDANÇA: Não apaga mais a tabela inteira. Usa INSERT OR REPLACE.
+        # logger.warning("Limpando tabela 'pendentes'."); cursor.execute("DELETE FROM pendentes") 
+        
+        registos_processados, ignorados, atualizacoes_cobrancas = 0,0,0
         
         for index, row_data_frame in mapped_df.iterrows(): 
             pedido_ref = str(row_data_frame.get('pedido_ref','')).strip(); valor_s = str(row_data_frame.get('valor','')).strip()
             data_emissao_str = str(row_data_frame.get('data_emissao_original', '')).strip()
             data_finalizacao_real_str = str(row_data_frame.get('data_finalizacao_original', '')).strip()
 
+            if not pedido_ref or not valor_s: 
+                ignorados+=1; 
+                logger.warning(f"Ignorando linha {index+2} por falta de Pedido Ref ou Valor: {row_data_frame.to_dict()}")
+                continue
+            try: 
+                val_f = float(valor_s.replace('R$','').strip().replace('.','').replace(',','.'))
+            except ValueError: 
+                ignorados+=1; 
+                logger.warning(f"Ignorando linha {index+2} por valor inválido: {valor_s}")
+                continue
+            
             data_emissao_db = format_date_for_db(data_emissao_str) if data_emissao_str else None
             data_finalizacao_real_db = format_date_for_db(data_finalizacao_real_str) if data_finalizacao_real_str else None
-
-            if not pedido_ref or not valor_s: ignorados+=1; continue
-            try: val_f = float(valor_s.replace('R$','').strip().replace('.','').replace(',','.'))
-            except ValueError: ignorados+=1; continue
             
             status_orig = str(row_data_frame.get('status','Pendente')).strip() or 'Pendente'
             status_final = "Finalizado" if data_finalizacao_real_db else status_orig 
             if normalize_column_name_generic(status_orig) in ["nao_finalizado", "nao finalizado", "em_aberto", "aberto"] and not data_finalizacao_real_db:
                 status_final = "Pendente"
 
-            dados_pendente = (pedido_ref, str(row_data_frame.get('fornecedor','N/A')).strip() or 'N/A', 
-                              str(row_data_frame.get('filial','N/A')).strip() or 'N/A', 
-                              val_f, status_final, 
-                              data_emissao_db, 
-                              data_finalizacao_real_db, 
-                              datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S'))
+            dados_pendente = (
+                pedido_ref, 
+                str(row_data_frame.get('fornecedor','N/A')).strip() or 'N/A', 
+                str(row_data_frame.get('filial','N/A')).strip() or 'N/A', 
+                val_f, 
+                status_final, 
+                data_emissao_db, 
+                data_finalizacao_real_db, 
+                datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S') # data_importacao
+            )
             try: 
-                cursor.execute("INSERT INTO pendentes (pedido_ref, fornecedor, filial, valor, status, data_emissao, data_finalizacao_real, data_importacao) VALUES (?,?,?,?,?,?,?,?)", dados_pendente); adicionados += 1
-                if data_emissao_db and pedido_ref:
+                # Usar INSERT OR REPLACE para inserir ou atualizar com base na UNIQUE constraint de pedido_ref
+                cursor.execute("""
+                    INSERT OR REPLACE INTO pendentes 
+                    (pedido_ref, fornecedor, filial, valor, status, data_emissao, data_finalizacao_real, data_importacao) 
+                    VALUES (?,?,?,?,?,?,?,?)
+                """, dados_pendente)
+                registos_processados += 1
+                
+                if data_emissao_db and pedido_ref: # Atualiza data_emissao_pedido em cobrancas
                     try:
+                        # Só atualiza se a data em cobrancas for nula ou vazia, para não sobrescrever uma data já definida manualmente
                         res_update = cursor.execute("UPDATE cobrancas SET data_emissao_pedido = ? WHERE pedido = ? AND (data_emissao_pedido IS NULL OR data_emissao_pedido = '')", (data_emissao_db, pedido_ref))
-                        if res_update.rowcount > 0: atualizacoes_cobrancas += res_update.rowcount
-                    except sqlite3.Error as e_up_cob: logger.error(f"Erro update data_emissao_pedido P:{pedido_ref}: {e_up_cob}")
-            except sqlite3.Error as e: logger.error(f"SQL Erro Pendência (Ref:{pedido_ref}): {e}"); ignorados+=1
-        conn.commit(); return True, f"Pendências: {adicionados} importados, {ignorados} ignorados. {atualizacoes_cobrancas} cobranças atualizadas."
+                        if res_update.rowcount > 0: 
+                            atualizacoes_cobrancas += res_update.rowcount
+                            logger.info(f"Data de emissão do pedido {pedido_ref} atualizada em Cobranças para {data_emissao_db}.")
+                    except sqlite3.Error as e_up_cob: 
+                        logger.error(f"Erro ao atualizar data_emissao_pedido para P:{pedido_ref}: {e_up_cob}")
+            except sqlite3.Error as e: 
+                logger.error(f"SQL Erro ao processar Pendência (Ref:{pedido_ref}): {e}")
+                ignorados+=1
+        
+        conn.commit()
+        return True, f"Pendências: {registos_processados} registos processados (novos ou atualizados), {ignorados} ignorados. {atualizacoes_cobrancas} cobranças tiveram data de emissão atualizada."
     except FileNotFoundError: return False, f"Ficheiro não encontrado: {file_path}"
-    except Exception as e: logger.error(f"Erro inesperado ao processar pendências: {e}", exc_info=True); return False, f"Erro inesperado: {str(e)}"
+    except Exception as e: 
+        logger.error(f"Erro inesperado ao processar pendências: {e}", exc_info=True)
+        return False, f"Erro inesperado: {str(e)}"
     finally:
         if conn: conn.close()
     return False, "Erro desconhecido no processamento de pendências."
@@ -277,12 +317,12 @@ def get_cobrancas(filtros=None, db_name='polis_database.db'):
             if val: 
                 if key in ['pedido', 'os', 'placa', 'filial', 'transportadora']: conditions.append(f"LOWER({key}) LIKE LOWER(?)"); params.append(f"%{val}%")
                 elif key in ['status', 'conformidade']: conditions.append(f"LOWER({key}) = LOWER(?)"); params.append(val)
-                elif key == 'data_emissao_de':
+                elif key == 'data_emissao_de': 
                     dt_db = format_date_for_query(val)
-                    if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao_pedido) >= ?"); params.append(dt_db)
-                elif key == 'data_emissao_ate':
+                    if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao_pedido) >= ? AND data_emissao_pedido IS NOT NULL"); params.append(dt_db)
+                elif key == 'data_emissao_ate': 
                     dt_db = format_date_for_query(val)
-                    if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao_pedido) <= ?"); params.append(dt_db)
+                    if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao_pedido) <= ? AND data_emissao_pedido IS NOT NULL"); params.append(dt_db)
     if conditions: query += " WHERE " + " AND ".join(conditions)
     query += " ORDER BY CASE WHEN data_emissao_pedido IS NULL THEN 1 ELSE 0 END, data_emissao_pedido DESC, id DESC" 
     try: cursor.execute(query, tuple(params)); return cursor.fetchall()
@@ -290,14 +330,29 @@ def get_cobrancas(filtros=None, db_name='polis_database.db'):
     finally:
         if conn: conn.close()
 
-def get_pendentes(filtros=None, db_name='polis_database.db'):
+def get_pendentes(filtros=None, db_name='polis_database.db', filial_cobranca=None): # Adicionado filial_cobranca para KPIs
     conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
     query = "SELECT id, pedido_ref, fornecedor, filial, valor, status, data_emissao, data_finalizacao_real, strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt, strftime('%d/%m/%Y', data_emissao) as data_emissao_fmt, strftime('%d/%m/%Y', data_finalizacao_real) as data_finalizacao_real_fmt FROM pendentes"
     conditions, params = [], []
+    
+    if filial_cobranca: # Usado por KPIs que filtram por filial da cobrança, mas precisam de dados da pendente
+        conditions.append("LOWER(TRIM(filial)) = LOWER(?)")
+        params.append(filial_cobranca.lower())
+
     if filtros:
+        # Filtros de data para data_emissao em pendentes (usado por KPIs de pendentes)
+        if filtros.get('data_emissao_de_pend'): 
+            dt_db = format_date_for_query(filtros['data_emissao_de_pend'])
+            if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao) >= ? AND data_emissao IS NOT NULL"); params.append(dt_db)
+        if filtros.get('data_emissao_ate_pend'):
+            dt_db = format_date_for_query(filtros['data_emissao_ate_pend'])
+            if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao) <= ? AND data_emissao IS NOT NULL"); params.append(dt_db)
+        
+        # Filtros específicos do relatório de pendentes
         if filtros.get('pedido_ref'): conditions.append("LOWER(pedido_ref) LIKE LOWER(?)"); params.append(f"%{filtros['pedido_ref']}%")
         if filtros.get('fornecedor'): conditions.append("LOWER(fornecedor) LIKE LOWER(?)"); params.append(f"%{filtros['fornecedor']}%")
-        if filtros.get('filial'): conditions.append("LOWER(filial) LIKE LOWER(?)"); params.append(f"%{filtros['filial']}%")
+        if filtros.get('filial') and not filial_cobranca: 
+            conditions.append("LOWER(filial) LIKE LOWER(?)"); params.append(f"%{filtros['filial']}%")
         if filtros.get('status'): conditions.append("LOWER(status) LIKE LOWER(?)"); params.append(f"%{filtros['status']}%")
         if filtros.get('valor_min'):
             try: conditions.append("valor >= ?"); params.append(float(str(filtros['valor_min']).replace(',', '.')))
@@ -305,8 +360,9 @@ def get_pendentes(filtros=None, db_name='polis_database.db'):
         if filtros.get('valor_max'):
             try: conditions.append("valor <= ?"); params.append(float(str(filtros['valor_max']).replace(',', '.')))
             except ValueError: logger.warning(f"Valor máximo inválido '{filtros['valor_max']}'")
+            
     if conditions: query += " WHERE " + " AND ".join(conditions)
-    query += " ORDER BY id DESC" 
+    query += " ORDER BY data_emissao DESC, id DESC" 
     try: cursor.execute(query, tuple(params)); return cursor.fetchall()
     except sqlite3.Error as e: logger.error(f"Erro SQL buscar pendências: {e}"); return []
     finally:
@@ -346,11 +402,14 @@ def get_pendentes_finalizadas_para_selecao(db_name='polis_database.db'):
     finally:
         if conn: conn.close()
 
-def get_distinct_values(column_name, table_name, db_name='polis_database.db'):
+def get_distinct_values(column_name, table_name, db_name='polis_database.db', where_clause=None, params=None):
     conn = sqlite3.connect(db_name); cursor = conn.cursor()
+    query = f"SELECT DISTINCT TRIM({column_name}) FROM {table_name} WHERE {column_name} IS NOT NULL AND TRIM({column_name}) != ''"
+    if where_clause:
+        query += f" AND {where_clause}"
+    query += f" ORDER BY TRIM({column_name}) ASC"
     try:
-        query = f"SELECT DISTINCT TRIM({column_name}) FROM {table_name} WHERE {column_name} IS NOT NULL AND TRIM({column_name}) != '' ORDER BY TRIM({column_name}) ASC"
-        cursor.execute(query); return [row[0] for row in cursor.fetchall()]
+        cursor.execute(query, params or ()); return [row[0] for row in cursor.fetchall()]
     except sqlite3.Error as e: logger.error(f"Erro SQL distintos '{column_name}' de '{table_name}': {e}"); return []
     finally:
         if conn: conn.close()
@@ -358,203 +417,317 @@ def get_distinct_values(column_name, table_name, db_name='polis_database.db'):
 def _build_date_filter_sql(date_column, data_de, data_ate):
     conditions = []
     params = []
+    
+    has_valid_date_filter = False
+    temp_conditions = [] 
+    
     if data_de:
         dt_de_str = format_date_for_query(data_de) 
-        if dt_de_str: conditions.append(f"STRFTIME('%Y-%m-%d', {date_column}) >= ?"); params.append(dt_de_str)
+        if dt_de_str: 
+            temp_conditions.append(f"STRFTIME('%Y-%m-%d', {date_column}) >= ?"); params.append(dt_de_str)
+            has_valid_date_filter = True
     if data_ate:
         dt_ate_str = format_date_for_query(data_ate)
-        if dt_ate_str: conditions.append(f"STRFTIME('%Y-%m-%d', {date_column}) <= ?"); params.append(dt_ate_str)
-    return " AND ".join(conditions), params
+        if dt_ate_str: 
+            temp_conditions.append(f"STRFTIME('%Y-%m-%d', {date_column}) <= ?"); params.append(dt_ate_str)
+            has_valid_date_filter = True
+            
+    if has_valid_date_filter:
+        conditions.append(f"{date_column} IS NOT NULL AND {date_column} != ''")
+        conditions.extend(temp_conditions)
+        return " AND ".join(conditions), params
+        
+    return "", []
 
-# --- Funções para Dashboard e KPIs com Filtro de Data ---
-def get_count_pedidos_status_especifico(status_desejado, db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, date_params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+
+# --- Funções para Dashboard e KPIs com Filtro de Data e Filial ---
+def get_count_pedidos_status_especifico(status_desejado, db_name, data_de=None, data_ate=None, filial_filtro=None):
+    conn = None; 
+    conditions = [f"LOWER(status) = LOWER(?)"]
+    params = [status_desejado.lower()]
+
+    date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
+    if date_filter_sql_part:
+        conditions.append(date_filter_sql_part)
+        params.extend(date_params)
+    
+    if filial_filtro:
+        conditions.append("LOWER(TRIM(filial)) = LOWER(?)")
+        params.append(filial_filtro.lower())
+        
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+    
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        query = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE LOWER(status) = LOWER(?) {date_filter_sql}"
-        cursor.execute(query, (status_desejado.lower(), *date_params)); count = cursor.fetchone()[0]
+        query = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {where_clause}"
+        cursor.execute(query, tuple(params)); count = cursor.fetchone()[0]
         return count if count is not None else 0
     except sqlite3.Error as e: logger.error(f"Erro SQL contar pedidos status '{status_desejado}': {e}"); return 0
     finally:
         if conn: conn.close()
 
-def get_placas_status_especifico(status_desejado, db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, date_params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+def get_placas_status_especifico(status_desejado, db_name, data_de=None, data_ate=None, filial_filtro=None):
+    conn = None; date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
+    conditions = [f"LOWER(status) = LOWER(?)", "placa IS NOT NULL", "TRIM(placa) != ''"]
+    final_params = [status_desejado.lower()]
+    if date_filter_sql_part:
+        conditions.append(date_filter_sql_part)
+        final_params.extend(date_params)
+    if filial_filtro: 
+        conditions.append("LOWER(TRIM(filial)) = LOWER(?)")
+        final_params.append(filial_filtro.lower())
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        query = f"SELECT DISTINCT placa FROM cobrancas WHERE LOWER(status) = LOWER(?) AND placa IS NOT NULL AND TRIM(placa) != '' {date_filter_sql} ORDER BY placa ASC"
-        cursor.execute(query, (status_desejado.lower(), *date_params)); return [row['placa'] for row in cursor.fetchall()]
+        query = f"SELECT DISTINCT placa FROM cobrancas {where_clause} ORDER BY placa ASC"
+        cursor.execute(query, tuple(final_params)); return [row['placa'] for row in cursor.fetchall()]
     except sqlite3.Error as e: logger.error(f"Erro SQL buscar placas status '{status_desejado}': {e}"); return []
     finally:
         if conn: conn.close()
 
-def get_count_total_pedidos_lancados(db_name, data_de=None, data_ate=None):
-    return get_count_pedidos_status_especifico("Com cobrança", db_name, data_de, data_ate)
+def get_count_total_pedidos_lancados(db_name, data_de=None, data_ate=None, filial_filtro=None):
+    return get_count_pedidos_status_especifico("Com cobrança", db_name, data_de, data_ate, filial_filtro)
 
-def get_count_pedidos_nao_conforme(db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, date_params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+def get_count_pedidos_nao_conforme(db_name, data_de=None, data_ate=None, filial_filtro=None):
+    conn = None; date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
+    
+    conditions = [f"LOWER(TRIM(conformidade)) = LOWER(?)"]
+    final_params = ['verificar']
+
+    if date_filter_sql_part:
+        conditions.append(date_filter_sql_part)
+        final_params.extend(date_params)
+    if filial_filtro:
+        conditions.append("LOWER(TRIM(filial)) = LOWER(?)")
+        final_params.append(filial_filtro.lower())
+        
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        query = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE LOWER(TRIM(conformidade)) = LOWER(?) {date_filter_sql}"
-        cursor.execute(query, ('verificar', *date_params)); count = cursor.fetchone()[0]
+        query = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {where_clause}"
+        cursor.execute(query, tuple(final_params)); count = cursor.fetchone()[0]
         return count if count is not None else 0
     except sqlite3.Error as e: logger.error(f"Erro SQL contar pedidos não conforme: {e}"); return 0
     finally:
         if conn: conn.close()
 
 def get_pedidos_status_por_filial(status_desejado, db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, date_params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+    conn = None; date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
+    conditions = [f"LOWER(status) = LOWER(?)", "filial IS NOT NULL", "TRIM(filial) != ''"]
+    final_params = [status_desejado.lower()]
+    if date_filter_sql_part:
+        conditions.append(date_filter_sql_part)
+        final_params.extend(date_params)
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        query = f"SELECT filial, COUNT(DISTINCT pedido) as count_pedidos FROM cobrancas WHERE LOWER(status) = LOWER(?) AND filial IS NOT NULL AND TRIM(filial) != '' {date_filter_sql} GROUP BY filial ORDER BY count_pedidos DESC, filial ASC"
-        cursor.execute(query, (status_desejado.lower(), *date_params)); return cursor.fetchall()
+        query = f"SELECT filial, COUNT(DISTINCT pedido) as count_pedidos FROM cobrancas {where_clause} GROUP BY filial ORDER BY count_pedidos DESC, filial ASC"
+        cursor.execute(query, tuple(final_params)); return cursor.fetchall()
     except sqlite3.Error as e: logger.error(f"Erro SQL status por filial '{status_desejado}': {e}"); return []
     finally:
         if conn: conn.close()
 
-def get_count_os_status_especifico(status_desejado, db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, date_params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+def get_count_os_status_especifico(status_desejado, db_name, data_de=None, data_ate=None, filial_filtro=None):
+    conn = None; date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
+    conditions = [f"LOWER(status) = LOWER(?)"]
+    final_params = [status_desejado.lower()]
+    if date_filter_sql_part:
+        conditions.append(date_filter_sql_part)
+        final_params.extend(date_params)
+    if filial_filtro:
+        conditions.append("LOWER(TRIM(filial)) = LOWER(?)")
+        final_params.append(filial_filtro.lower())
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        query = f"SELECT COUNT(DISTINCT os) FROM cobrancas WHERE LOWER(status) = LOWER(?) {date_filter_sql}"
-        cursor.execute(query, (status_desejado.lower(), *date_params)); count = cursor.fetchone()[0]
+        query = f"SELECT COUNT(DISTINCT os) FROM cobrancas {where_clause}"
+        cursor.execute(query, tuple(final_params)); count = cursor.fetchone()[0]
         return count if count is not None else 0
     except sqlite3.Error as e: logger.error(f"Erro SQL contar OS status '{status_desejado}': {e}"); return 0
     finally:
         if conn: conn.close()
 
-def get_count_total_os_lancadas(db_name, data_de=None, data_ate=None):
-    return get_count_os_status_especifico("Com cobrança", db_name, data_de, data_ate)
+def get_count_total_os_lancadas(db_name, data_de=None, data_ate=None, filial_filtro=None):
+    return get_count_os_status_especifico("Com cobrança", db_name, data_de, data_ate, filial_filtro)
 
-def get_count_os_para_verificar(db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, date_params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+def get_count_os_para_verificar(db_name, data_de=None, data_ate=None, filial_filtro=None):
+    conn = None; date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
+    conditions = [f"LOWER(TRIM(conformidade)) = LOWER(?)"]
+    final_params = ['verificar']
+    if date_filter_sql_part:
+        conditions.append(date_filter_sql_part)
+        final_params.extend(date_params)
+    if filial_filtro:
+        conditions.append("LOWER(TRIM(filial)) = LOWER(?)")
+        final_params.append(filial_filtro.lower())
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        query = f"SELECT COUNT(DISTINCT os) FROM cobrancas WHERE LOWER(TRIM(conformidade)) = LOWER(?) {date_filter_sql}"
-        cursor.execute(query, ('verificar', *date_params)); count = cursor.fetchone()[0]
+        query = f"SELECT COUNT(DISTINCT os) FROM cobrancas {where_clause}"
+        cursor.execute(query, tuple(final_params)); count = cursor.fetchone()[0]
         return count if count is not None else 0
     except sqlite3.Error as e: logger.error(f"Erro SQL contar OS para verificar: {e}"); return 0
     finally:
         if conn: conn.close()
 
 def get_os_status_por_filial(status_desejado, db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, date_params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+    conn = None; date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
+    conditions = [f"LOWER(status) = LOWER(?)", "filial IS NOT NULL", "TRIM(filial) != ''"]
+    final_params = [status_desejado.lower()]
+    if date_filter_sql_part:
+        conditions.append(date_filter_sql_part)
+        final_params.extend(date_params)
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        query = f"SELECT filial, COUNT(DISTINCT os) as count_os FROM cobrancas WHERE LOWER(status) = LOWER(?) AND filial IS NOT NULL AND TRIM(filial) != '' {date_filter_sql} GROUP BY filial ORDER BY count_pedidos DESC, filial ASC"
-        cursor.execute(query, (status_desejado.lower(), *date_params)); return cursor.fetchall()
+        query = f"SELECT filial, COUNT(DISTINCT os) as count_os FROM cobrancas {where_clause} GROUP BY filial ORDER BY count_os DESC, filial ASC" # Corrigido para count_os
+        cursor.execute(query, tuple(final_params)); return cursor.fetchall()
     except sqlite3.Error as e: logger.error(f"Erro SQL OS status por filial '{status_desejado}': {e}"); return []
     finally:
         if conn: conn.close()
 
-def get_os_com_status_especifico(status_desejado, db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, date_params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, date_params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+def get_os_com_status_especifico(status_desejado, db_name, data_de=None, data_ate=None, filial_filtro=None):
+    conn = None; date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
+    conditions = [f"LOWER(status) = LOWER(?)", "os IS NOT NULL", "TRIM(os) != ''"]
+    final_params = [status_desejado.lower()]
+    if date_filter_sql_part:
+        conditions.append(date_filter_sql_part)
+        final_params.extend(date_params)
+    if filial_filtro:
+        conditions.append("LOWER(TRIM(filial)) = LOWER(?)")
+        final_params.append(filial_filtro.lower())
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        query = f"SELECT DISTINCT os FROM cobrancas WHERE LOWER(status) = LOWER(?) AND os IS NOT NULL AND TRIM(os) != '' {date_filter_sql} ORDER BY os ASC"
-        cursor.execute(query, (status_desejado.lower(), *date_params)); return cursor.fetchall() 
+        query = f"SELECT DISTINCT os FROM cobrancas {where_clause} ORDER BY os ASC"
+        cursor.execute(query, tuple(final_params)); return cursor.fetchall() 
     except sqlite3.Error as e: logger.error(f"Erro SQL buscar OS com status '{status_desejado}': {e}"); return []
     finally:
         if conn: conn.close()
 
-def get_kpi_taxa_cobranca_efetuada(db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" WHERE {date_filter_sql_part}"
+def get_kpi_taxa_cobranca_efetuada(db_name, data_de=None, data_ate=None, filial_filtro=None):
+    conn = None
+    base_params_total = []
+    conditions_total = []
+    
+    date_filter_sql_part, date_params_sql = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
+    if date_filter_sql_part:
+        conditions_total.append(date_filter_sql_part)
+        base_params_total.extend(date_params_sql)
+    
+    if filial_filtro:
+        conditions_total.append("LOWER(TRIM(filial)) = LOWER(?)")
+        base_params_total.append(filial_filtro.lower())
+        
+    where_clause_total = " WHERE " + " AND ".join(conditions_total) if conditions_total else ""
+    query_total = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {where_clause_total}"
+    
+    conditions_com_cobranca = [f"LOWER(status) = LOWER(?)"] + conditions_total
+    params_com_cobranca = ["com cobrança"] + base_params_total
+    where_clause_com_cobranca = "WHERE " + " AND ".join(conditions_com_cobranca)
+    query_com_cobranca = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {where_clause_com_cobranca}"
+    
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        query_total = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {date_filter_sql}"
-        cursor.execute(query_total, tuple(params)); 
+        cursor.execute(query_total, tuple(base_params_total)); 
         total_pedidos_registados = cursor.fetchone()[0] or 0
         if total_pedidos_registados == 0: return 0.0
-        status_com_cobranca = "Com cobrança"
-        query_com_cobranca_where_clause = f"LOWER(status) = LOWER(?)"
-        if date_filter_sql: query_com_cobranca = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {date_filter_sql} AND {query_com_cobranca_where_clause}"; final_params = (*params, status_com_cobranca.lower())
-        else: query_com_cobranca = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE {query_com_cobranca_where_clause}"; final_params = (status_com_cobranca.lower(),)
-        cursor.execute(query_com_cobranca, final_params); pedidos_com_cobranca = cursor.fetchone()[0] or 0
+        
+        cursor.execute(query_com_cobranca, tuple(params_com_cobranca)); 
+        pedidos_com_cobranca = cursor.fetchone()[0] or 0
+        
         taxa = (pedidos_com_cobranca / total_pedidos_registados) * 100 if total_pedidos_registados > 0 else 0.0
         return round(taxa, 2)
     except sqlite3.Error as e: logger.error(f"Erro SQL KPI taxa cobrança: {e}"); return "N/D"
     finally:
         if conn: conn.close()
 
-def get_kpi_percentual_nao_conforme(db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" WHERE {date_filter_sql_part}"
+def get_kpi_percentual_nao_conforme(db_name, data_de=None, data_ate=None, filial_filtro=None):
+    conn = None
+    base_params_total = []
+    conditions_total = []
+
+    date_filter_sql_part, date_params_sql = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
+    if date_filter_sql_part:
+        conditions_total.append(date_filter_sql_part)
+        base_params_total.extend(date_params_sql)
+    
+    if filial_filtro:
+        conditions_total.append("LOWER(TRIM(filial)) = LOWER(?)")
+        base_params_total.append(filial_filtro.lower())
+        
+    where_clause_total = " WHERE " + " AND ".join(conditions_total) if conditions_total else ""
+    query_total = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {where_clause_total}"
+
+    conditions_nao_conforme = [f"LOWER(TRIM(conformidade)) = LOWER(?)"] + conditions_total
+    params_nao_conforme = ["verificar"] + base_params_total
+    where_clause_nao_conforme = "WHERE " + " AND ".join(conditions_nao_conforme)
+    query_nao_conforme = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {where_clause_nao_conforme}"
+        
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        query_total = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {date_filter_sql}"
-        cursor.execute(query_total, tuple(params));
+        cursor.execute(query_total, tuple(base_params_total));
         total_pedidos_registados = cursor.fetchone()[0] or 0
         if total_pedidos_registados == 0: return 0.0
-        conformidade_verificar = "Verificar"
-        query_nao_conforme_where_clause = f"LOWER(TRIM(conformidade)) = LOWER(?)"
-        if date_filter_sql: query_nao_conforme = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas {date_filter_sql} AND {query_nao_conforme_where_clause}"; final_params = (*params, conformidade_verificar.lower())
-        else: query_nao_conforme = f"SELECT COUNT(DISTINCT pedido) FROM cobrancas WHERE {query_nao_conforme_where_clause}"; final_params = (conformidade_verificar.lower(),)
-        cursor.execute(query_nao_conforme, final_params); pedidos_nao_conforme = cursor.fetchone()[0] or 0
+        
+        cursor.execute(query_nao_conforme, tuple(params_nao_conforme)); 
+        pedidos_nao_conforme = cursor.fetchone()[0] or 0
+        
         taxa = (pedidos_nao_conforme / total_pedidos_registados) * 100 if total_pedidos_registados > 0 else 0.0
         return round(taxa, 2)
     except sqlite3.Error as e: logger.error(f"Erro SQL KPI não conforme: {e}"); return "N/D"
     finally:
         if conn: conn.close()
 
-def get_kpi_valor_total_pendencias_ativas(db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, params = _build_date_filter_sql("COALESCE(data_emissao, data_importacao)", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+def get_kpi_valor_total_pendencias_ativas(db_name, data_de=None, data_ate=None, filial_filtro=None):
+    conn = None
+    conditions = ["LOWER(TRIM(status)) = LOWER(?)"]
+    params = ['pendente']
+
+    date_filter_sql_part, date_params_sql = _build_date_filter_sql("data_emissao", data_de, data_ate)
+    if date_filter_sql_part:
+        conditions.append(date_filter_sql_part)
+        params.extend(date_params_sql)
+    
+    if filial_filtro:
+        conditions.append("LOWER(TRIM(filial)) = LOWER(?)")
+        params.append(filial_filtro.lower())
+        
+    where_clause = " WHERE " + " AND ".join(conditions)
+    
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        query = f"SELECT SUM(valor) FROM pendentes WHERE LOWER(TRIM(status)) = LOWER(?) {date_filter_sql}"
-        cursor.execute(query, ('pendente', *params)); 
+        query = f"SELECT SUM(valor) FROM pendentes {where_clause}"
+        cursor.execute(query, tuple(params)); 
         total_valor = cursor.fetchone()[0]
         return total_valor if total_valor is not None else 0.0
     except sqlite3.Error as e: logger.error(f"Erro SQL KPI valor pendências: {e}"); return 0.0
     finally:
         if conn: conn.close()
 
-def get_kpi_tempo_medio_resolucao_pendencias(db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, params = _build_date_filter_sql("data_finalizacao_real", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+def get_kpi_tempo_medio_resolucao_pendencias(db_name, data_de=None, data_ate=None, filial_filtro=None):
+    conn = None
+    conditions = [
+        "LOWER(TRIM(status)) = LOWER('finalizado')",
+        "data_emissao IS NOT NULL AND data_emissao != ''",
+        "data_finalizacao_real IS NOT NULL AND data_finalizacao_real != ''"
+    ]
+    params = []
+
+    date_filter_sql_part, date_params_sql = _build_date_filter_sql("data_finalizacao_real", data_de, data_ate)
+    if date_filter_sql_part:
+        conditions.append(date_filter_sql_part)
+        params.extend(date_params_sql)
+    
+    if filial_filtro:
+        conditions.append("LOWER(TRIM(filial)) = LOWER(?)")
+        params.append(filial_filtro.lower())
+
+    where_clause = " WHERE " + " AND ".join(conditions)
+    
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        query = f"""
-            SELECT AVG(JULIANDAY(data_finalizacao_real) - JULIANDAY(data_emissao)) as tempo_medio_dias
-            FROM pendentes
-            WHERE LOWER(TRIM(status)) = LOWER('finalizado') 
-              AND data_emissao IS NOT NULL AND data_emissao != ''
-              AND data_finalizacao_real IS NOT NULL AND data_finalizacao_real != ''
-              {date_filter_sql}
-        """
+        query = f"SELECT AVG(JULIANDAY(data_finalizacao_real) - JULIANDAY(data_emissao)) as tempo_medio_dias FROM pendentes {where_clause}"
         cursor.execute(query, tuple(params)); resultado = cursor.fetchone()
         if resultado and resultado['tempo_medio_dias'] is not None: return round(resultado['tempo_medio_dias'], 1) 
         else: return "N/D" 
@@ -563,60 +736,57 @@ def get_kpi_tempo_medio_resolucao_pendencias(db_name, data_de=None, data_ate=Non
     finally:
         if conn: conn.close()
 
-def get_kpi_valor_investido_abastecimento(db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, params = "", []
-    # O filtro de data aplica-se à data_importacao da cobrança, pois é quando o custo foi "lançado"
-    if data_de or data_ate:
-        date_filter_sql_part, params = _build_date_filter_sql("c.data_importacao", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
+def get_kpi_valor_investido_por_categoria(db_name, categoria_os, data_de=None, data_ate=None, filial_filtro=None):
+    conn = None
+    conditions = [
+        "LOWER(TRIM(c.os)) = LOWER(?)",
+        "LOWER(TRIM(p.status)) = LOWER('finalizado')" 
+    ]
+    params = [categoria_os.lower()]
+
+    # Filtro de data é aplicado à data_emissao_pedido da tabela cobrancas
+    date_filter_sql_part, date_params_sql = _build_date_filter_sql("c.data_emissao_pedido", data_de, data_ate)
+    if date_filter_sql_part: # date_filter_sql_part já inclui "c.data_emissao_pedido IS NOT NULL"
+        conditions.append(date_filter_sql_part)
+        params.extend(date_params_sql)
+    elif data_de or data_ate: # Se houver filtro de data, mas um deles for inválido, ainda precisamos garantir que a data não é nula
+        conditions.append("c.data_emissao_pedido IS NOT NULL AND c.data_emissao_pedido != ''")
+
+    
+    if filial_filtro: 
+        conditions.append("LOWER(TRIM(c.filial)) = LOWER(?)") 
+        params.append(filial_filtro.lower())
+
+    where_clause = " WHERE " + " AND ".join(conditions)
+    
+    query = f"""
+        SELECT SUM(p.valor) as total_valor
+        FROM pendentes p
+        JOIN cobrancas c ON p.pedido_ref = c.pedido
+        {where_clause}
+    """
     try:
-        conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        query = f"""
-            SELECT SUM(p.valor) 
-            FROM pendentes p
-            JOIN cobrancas c ON p.pedido_ref = c.pedido
-            WHERE LOWER(TRIM(c.os)) = LOWER('abastecimento')
-              AND LOWER(TRIM(p.status)) = LOWER('finalizado') 
-              {date_filter_sql}
-        """
-        # Adiciona os parâmetros do filtro de data APÓS os parâmetros fixos da query
-        final_params = tuple(params)
-        cursor.execute(query, final_params)
-        total_valor = cursor.fetchone()[0]
-        return total_valor if total_valor is not None else 0.0
+        conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
+        cursor.execute(query, tuple(params))
+        resultado = cursor.fetchone()
+        return resultado['total_valor'] if resultado and resultado['total_valor'] is not None else 0.0
     except sqlite3.Error as e:
-        logger.error(f"Erro SQL KPI valor investido em abastecimento: {e}")
+        logger.error(f"Erro SQL KPI valor investido em '{categoria_os}': {e}")
         return 0.0
     finally:
         if conn: conn.close()
 
-def get_kpi_valor_investido_estoque(db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, params = _build_date_filter_sql("c.data_importacao", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" AND {date_filter_sql_part}"
-    try:
-        conn = sqlite3.connect(db_name); cursor = conn.cursor()
-        query = f"""
-            SELECT SUM(p.valor) 
-            FROM pendentes p
-            JOIN cobrancas c ON p.pedido_ref = c.pedido
-            WHERE LOWER(TRIM(c.os)) = LOWER('estoque')
-              AND LOWER(TRIM(p.status)) = LOWER('finalizado')
-              {date_filter_sql}
-        """
-        final_params = tuple(params)
-        cursor.execute(query, final_params)
-        total_valor = cursor.fetchone()[0]
-        return total_valor if total_valor is not None else 0.0
-    except sqlite3.Error as e:
-        logger.error(f"Erro SQL KPI valor investido em estoque: {e}")
-        return 0.0
-    finally:
-        if conn: conn.close()
+def get_kpi_valor_investido_abastecimento(db_name, data_de=None, data_ate=None, filial_filtro=None):
+    return get_kpi_valor_investido_por_categoria(db_name, "Abastecimento", data_de, data_ate, filial_filtro)
+
+def get_kpi_valor_investido_estoque(db_name, data_de=None, data_ate=None, filial_filtro=None):
+    return get_kpi_valor_investido_por_categoria(db_name, "Estoque", data_de, data_ate, filial_filtro)
+
+def get_kpi_valor_investido_outros(db_name, data_de=None, data_ate=None, filial_filtro=None):
+    return get_kpi_valor_investido_por_categoria(db_name, "Outros", data_de, data_ate, filial_filtro)
 
 
-def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=None, granularidade='mes'):
+def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=None, granularidade='mes', filial_filtro=None):
     conn = None
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
@@ -631,9 +801,7 @@ def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=Non
             granularidade = 'mes'; date_format_sql = "%Y-%m"; pd_freq = "MS"; label_format_str = "%b/%y" 
 
         data_de_query, data_ate_query = data_de, data_ate
-        num_months_default = 6 
-        num_weeks_default = 12 
-        num_days_default = 30  
+        num_months_default = 6; num_weeks_default = 12; num_days_default = 30  
 
         if not data_de_query and not data_ate_query:
             end_date_obj = datetime.now()
@@ -653,17 +821,34 @@ def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=Non
             end_date_obj = datetime.now()
             data_ate_query = end_date_obj.strftime('%Y-%m-%d')
         
-        date_filter_sql_cob, params_cob = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de_query, data_ate_query)
-        if date_filter_sql_cob: date_filter_sql_cob = f" WHERE {date_filter_sql_cob}"
+        conditions_cob = ["data_emissao_pedido IS NOT NULL"]
+        params_cob = []
+        date_filter_sql_cob, params_cob_date = _build_date_filter_sql("data_emissao_pedido", data_de_query, data_ate_query)
+        if date_filter_sql_cob: 
+            conditions_cob.append(date_filter_sql_cob)
+            params_cob.extend(params_cob_date)
+        if filial_filtro:
+            conditions_cob.append("LOWER(TRIM(filial)) = LOWER(?)")
+            params_cob.append(filial_filtro.lower())
+        where_clause_cob = " WHERE " + " AND ".join(conditions_cob)
         
-        date_filter_sql_pend, params_pend = _build_date_filter_sql("COALESCE(data_emissao, data_importacao)", data_de_query, data_ate_query)
-        if date_filter_sql_pend: date_filter_sql_pend = f" WHERE {date_filter_sql_pend}"
+        conditions_pend = ["data_emissao IS NOT NULL"]
+        params_pend = []
+        date_filter_sql_pend, params_pend_date = _build_date_filter_sql("data_emissao", data_de_query, data_ate_query)
+        if date_filter_sql_pend: 
+            conditions_pend.append(date_filter_sql_pend)
+            params_pend.extend(params_pend_date)
+        if filial_filtro: 
+            conditions_pend.append("LOWER(TRIM(filial)) = LOWER(?)")
+            params_pend.append(filial_filtro.lower())
+        where_clause_pend = " WHERE " + " AND ".join(conditions_pend)
 
-        query_cobrancas = f"SELECT strftime('{date_format_sql}', COALESCE(data_emissao_pedido, data_importacao)) as periodo, COUNT(DISTINCT pedido) as total_cobrancas FROM cobrancas {date_filter_sql_cob} GROUP BY periodo ORDER BY periodo ASC;"
+
+        query_cobrancas = f"SELECT strftime('{date_format_sql}', data_emissao_pedido) as periodo, COUNT(DISTINCT pedido) as total_cobrancas FROM cobrancas {where_clause_cob} GROUP BY periodo ORDER BY periodo ASC;"
         cursor.execute(query_cobrancas, tuple(params_cob))
         cobrancas_raw = {row['periodo']: row['total_cobrancas'] for row in cursor.fetchall()}
 
-        query_pendentes = f"SELECT strftime('{date_format_sql}', COALESCE(data_emissao, data_importacao)) as periodo, COUNT(DISTINCT pedido_ref) as total_pendencias FROM pendentes {date_filter_sql_pend} GROUP BY periodo ORDER BY periodo ASC;"
+        query_pendentes = f"SELECT strftime('{date_format_sql}', data_emissao) as periodo, COUNT(DISTINCT pedido_ref) as total_pendencias FROM pendentes {where_clause_pend} GROUP BY periodo ORDER BY periodo ASC;"
         cursor.execute(query_pendentes, tuple(params_pend))
         pendentes_raw = {row['periodo']: row['total_pendencias'] for row in cursor.fetchall()}
         
@@ -697,14 +882,25 @@ def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=Non
     finally:
         if conn: conn.close()
 
-def get_distribuicao_status_cobranca(db_name, data_de=None, data_ate=None):
-    conn = None; date_filter_sql, params = "", []
-    if data_de or data_ate:
-        date_filter_sql_part, params = _build_date_filter_sql("COALESCE(data_emissao_pedido, data_importacao)", data_de, data_ate)
-        if date_filter_sql_part: date_filter_sql = f" WHERE {date_filter_sql_part}"
+def get_distribuicao_status_cobranca(db_name, data_de=None, data_ate=None, filial_filtro=None):
+    conn = None
+    conditions = ["data_emissao_pedido IS NOT NULL"] 
+    params = []
+
+    date_filter_sql_part, date_params_sql = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
+    if date_filter_sql_part:
+        conditions.append(date_filter_sql_part)
+        params.extend(date_params_sql)
+    
+    if filial_filtro:
+        conditions.append("LOWER(TRIM(filial)) = LOWER(?)")
+        params.append(filial_filtro.lower())
+
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+    
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        query = f"SELECT status, COUNT(DISTINCT pedido) as total FROM cobrancas {date_filter_sql} GROUP BY status ORDER BY status"
+        query = f"SELECT status, COUNT(DISTINCT pedido) as total FROM cobrancas {where_clause} GROUP BY status ORDER BY status"
         cursor.execute(query, tuple(params))
         return cursor.fetchall()
     except sqlite3.Error as e:
@@ -819,18 +1015,30 @@ def add_or_update_cobranca_manual(data, db_name):
             return False, "Pedido e OS são obrigatórios."
 
         data_emissao_pedido_db = None
-        if data.get('data_emissao_pedido') and str(data.get('data_emissao_pedido')).strip():
-            data_emissao_pedido_db = format_date_for_db(data.get('data_emissao_pedido'))
+        data_emissao_pedido_input = data.get('data_emissao_pedido') # Pode ser AAAA-MM-DD ou data_emissao da pendente
+
+        if data_emissao_pedido_input and str(data_emissao_pedido_input).strip():
+            # Se for uma string que já está no formato do banco (YYYY-MM-DD HH:MM:SS), usa diretamente.
+            # Caso contrário, tenta formatar.
+            if re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$', str(data_emissao_pedido_input)):
+                data_emissao_pedido_db = str(data_emissao_pedido_input)
+            else:
+                data_emissao_pedido_db = format_date_for_db(data_emissao_pedido_input)
+            
             if not data_emissao_pedido_db:
-                logger.warning(f"Data de emissão do pedido '{data.get('data_emissao_pedido')}' inválida para OS manual. Será ignorada.")
+                logger.warning(f"Data de emissão do pedido '{data_emissao_pedido_input}' inválida para OS manual. Será ignorada se não encontrada em pendentes.")
         
-        if not data_emissao_pedido_db: 
+        # Se ainda for None e não foi explicitamente herdada, tenta buscar da tabela pendentes
+        if not data_emissao_pedido_db and 'data_emissao_herdada' not in data: 
             cursor.execute("SELECT data_emissao FROM pendentes WHERE pedido_ref = ? AND data_emissao IS NOT NULL", (pedido,))
             pendente_data = cursor.fetchone()
             if pendente_data:
                 data_emissao_pedido_db = pendente_data['data_emissao'] 
                 logger.info(f"Data de emissão '{data_emissao_pedido_db}' obtida da pendente para o pedido {pedido}.")
-        
+        elif 'data_emissao_herdada' in data and data['data_emissao_herdada']: 
+             data_emissao_pedido_db = data['data_emissao_herdada']
+
+
         cursor.execute("SELECT id, data_emissao_pedido FROM cobrancas WHERE pedido = ? AND os = ?", (pedido, os_val))
         existing_record = cursor.fetchone()
         
@@ -839,12 +1047,9 @@ def add_or_update_cobranca_manual(data, db_name):
         status_cobranca_manual = categorizar_status_cobranca(data.get('status'))
         conformidade_manual = categorizar_conformidade(data.get('conformidade'))
 
-
         if existing_record:
             data_emissao_pedido_val_final = existing_record['data_emissao_pedido'] 
-            if not data_emissao_pedido_val_final and data_emissao_pedido_db: 
-                data_emissao_pedido_val_final = data_emissao_pedido_db
-            elif data.get('data_emissao_pedido') and data_emissao_pedido_db: 
+            if data_emissao_pedido_db: 
                  data_emissao_pedido_val_final = data_emissao_pedido_db
 
             cursor.execute("""

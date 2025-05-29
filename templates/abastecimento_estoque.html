@@ -1,87 +1,76 @@
 {% extends "base.html" %}
 
-{% block title %}Abastecimento e Estoque - Pólis{% endblock %}
+{% block title %}Abastecimento, Estoque e Outros - Pólis{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h2 class="page-title"><i class="fas fa-gas-pump"></i> Abastecimento e Estoque</h2>
+    <h2 class="page-title"><i class="fas fa-dolly-flatbed"></i> Abastecimento, Estoque e Outros Custos</h2>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <h3><i class="fas fa-tags"></i> Lançar Custo de Abastecimento ou Estoque em Cobranças</h3>
+        <h3><i class="fas fa-tags"></i> Lançar Custo em Cobranças</h3>
     </div>
     <div class="card-body">
         <p class="text-muted small">
-            Selecione um pedido finalizado da lista de pendências e a categoria do custo (Abastecimento ou Estoque).
-            Isto criará um novo registo em "Cobranças" com os dados apropriados (Status: Com Cobrança, Transportadora: TRANSAC TRANSPORTE ROD. LTDA).
+            Selecione um ou mais pedidos finalizados da lista de pendências e a categoria do custo.
+            Isto criará novos registos em "Cobranças" com os dados apropriados (Status: Com Cobrança, Transportadora: TRANSAC TRANSPORTE ROD. LTDA).
         </p>
         <form method="POST" action="{{ url_for('abastecimento_estoque') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-            {# <input type="hidden" name="action" value="lancar_custo"/> #} {# Se precisar de múltiplas ações no POST desta rota #}
 
             <div class="form-group">
-                <label for="id_pendente_selecionada_abs">Selecione o Pedido Finalizado (de Pendências): <span class="text-danger">*</span></label>
-                <select id="id_pendente_selecionada_abs" name="id_pendente_selecionada" class="form-control" required>
-                    <option value="">Selecione um Pedido...</option>
-                    {% for pendente in pendentes_finalizadas_lista %} {# A variável passada pela rota deve ser esta #}
-                        <option value="{{ pendente.id }}" 
-                                data-pedido_ref="{{ pendente.pedido_ref }}" 
-                                data-data_emissao="{{ pendente.data_emissao or '' }}" 
-                                data-filial="{{ pendente.filial or 'N/A' }}">
-                            {{ pendente.pedido_ref }} (Filial: {{pendente.filial or 'N/A'}}, Emitido em: {{ pendente.data_emissao | format_date_br or 'N/A' }})
-                        </option>
-                    {% endfor %}
-                </select>
-                 {% if not pendentes_finalizadas_lista %}
-                    <small class="text-warning d-block mt-1">Nenhuma pendência com status "Finalizado" encontrada para seleção.</small>
-                {% endif %}
-            </div>
-
-            {# Campos para exibir dados da pendente selecionada (apenas visual) #}
-            <div class="form-row">
-                <div class="form-group col-md-4">
-                    <label for="pedido_ref_selecionado_abs">Pedido Ref. da Pendência:</label>
-                    <input type="text" id="pedido_ref_selecionado_abs" class="form-control" readonly disabled>
+                <label>Selecione o(s) Pedido(s) Finalizado(s) (de Pendências): <span class="text-danger">*</span></label>
+                <div class="checkbox-list-container">
+                    {% if pendentes_finalizadas_lista %}
+                        {% for pendente in pendentes_finalizadas_lista %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" 
+                                   name="ids_pendentes_selecionadas" 
+                                   value="{{ pendente.id }}" 
+                                   id="pendente_abs_{{ pendente.id }}"
+                                   {% if pendente.id|string in (form_data.getlist('ids_pendentes_selecionadas') if form_data else []) %}checked{% endif %}>
+                            <label class="form-check-label" for="pendente_abs_{{ pendente.id }}">
+                                {{ pendente.pedido_ref }} 
+                                <span class="text-muted small">(Filial: {{ pendente.filial or 'N/A' }}, Emitido em: {{ pendente.data_emissao | format_date_br or 'N/A' }})</span>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-warning">Nenhuma pendência com status "Finalizado" (e que não esteja já em Cobranças) encontrada para seleção.</p>
+                    {% endif %}
                 </div>
-                 <div class="form-group col-md-4">
-                    <label for="filial_pendente_selecionada_abs">Filial da Pendência:</label>
-                    <input type="text" id="filial_pendente_selecionada_abs" class="form-control" readonly disabled>
-                </div>
-                <div class="form-group col-md-4">
-                    <label for="data_emissao_pendente_selecionada_abs">Data Emissão da Pendência:</label>
-                    <input type="text" id="data_emissao_pendente_selecionada_abs" class="form-control" readonly disabled>
-                </div>
+                <small class="text-muted">Marque as caixas dos pedidos desejados.</small>
             </div>
             
-            <hr>
-            <h4 class="mb-3 mt-3">Detalhes do Lançamento:</h4>
+            <hr class="my-4">
+            <h4 class="mb-3">Detalhes do Lançamento (a aplicar a todos os pedidos selecionados):</h4>
 
             <div class="form-row">
                 <div class="form-group col-md-6">
                     <label for="categoria_custo">Categoria do Custo (será a OS): <span class="text-danger">*</span></label>
                     <select id="categoria_custo" name="categoria_custo" class="form-control" required>
                         <option value="">Selecione a Categoria...</option>
-                        <option value="Estoque" {% if request.form.categoria_custo == 'Estoque' %}selected{% endif %}>Estoque</option>
-                        <option value="Abastecimento" {% if request.form.categoria_custo == 'Abastecimento' %}selected{% endif %}>Abastecimento</option>
+                        <option value="Abastecimento" {% if form_data.categoria_custo == 'Abastecimento' %}selected{% endif %}>Abastecimento</option>
+                        <option value="Estoque" {% if form_data.categoria_custo == 'Estoque' %}selected{% endif %}>Estoque</option>
+                        <option value="Outros" {% if form_data.categoria_custo == 'Outros' %}selected{% endif %}>Outros</option> {# NOVA OPÇÃO #}
                     </select>
                 </div>
                 <div class="form-group col-md-6">
                     <label for="abs_placa">Placa (Opcional):</label>
                     <input type="text" id="abs_placa" name="placa" class="form-control" value="{{ form_data.placa or '' }}" placeholder="Default: N/A">
-                    <small class="text-muted">Ex: veículo de frota que abasteceu.</small>
+                    <small class="text-muted">Ex: veículo de frota que abasteceu. Será o mesmo para todos os pedidos selecionados.</small>
                 </div>
             </div>
              <div class="form-group">
                 <label for="abs_filial">Filial para Cobrança (Opcional):</label>
-                <input type="text" id="abs_filial" name="filial" class="form-control" value="{{ form_data.filial or '' }}" placeholder="Default: Filial da pendência selecionada">
-                 <small class="text-muted">Se em branco, usará a filial da pendência selecionada.</small>
+                <input type="text" id="abs_filial" name="filial" class="form-control" value="{{ form_data.filial or '' }}" placeholder="Default: Filial da primeira pendência selecionada">
+                 <small class="text-muted">Se em branco, usará a filial de cada pendência selecionada. Se preenchido, usará este valor para todos.</small>
             </div>
-
 
             <div class="form-group mt-4">
                 <button type="submit" class="btn btn-primary" {% if not pendentes_finalizadas_lista %}disabled{% endif %}>
-                    <i class="fas fa-share-square"></i> Lançar Custo em Cobranças
+                    <i class="fas fa-share-square"></i> Lançar Custos em Cobranças
                 </button>
                 <a href="{{ url_for('home') }}" class="btn btn-secondary">Cancelar</a>
             </div>
@@ -102,66 +91,46 @@
     }
     .text-danger { color: var(--flash-error-text-L); }
     html[data-theme="noite"] .text-danger { color: var(--flash-error-text-D); }
+    .checkbox-list-container {
+        max-height: 250px; 
+        overflow-y: auto;
+        border: 1px solid var(--input-border-color);
+        padding: 0.75rem;
+        border-radius: var(--border-radius-base);
+        background-color: var(--input-bg);
+        margin-bottom: 0.5rem;
+    }
+    .form-check {
+        display: flex; 
+        align-items: center;
+        padding: 0.3rem 0.5rem;
+        margin-bottom: 0.25rem;
+        border-radius: var(--border-radius-sm);
+    }
+    .form-check:hover {
+        background-color: var(--table-hover-bg);
+    }
+    .form-check-input {
+        margin-right: 0.75rem;
+        width: 1.1em; 
+        height: 1.1em;
+        cursor: pointer;
+    }
+    .form-check-label {
+        font-weight: 400;
+        cursor: pointer;
+        flex-grow: 1; 
+    }
+    .form-check-label .text-muted {
+        font-size: 0.85em;
+    }
 </style>
 {% endblock %}
 
 {% block scripts_extra %}
 {{ super() }}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const selectPendenteAbs = document.getElementById('id_pendente_selecionada_abs');
-    const pedidoRefDisplayAbs = document.getElementById('pedido_ref_selecionado_abs');
-    const filialDisplayAbs = document.getElementById('filial_pendente_selecionada_abs');
-    const dataEmissaoDisplayAbs = document.getElementById('data_emissao_pendente_selecionada_abs');
-    const filialInputCobrancaAbs = document.getElementById('abs_filial');
-
-    if (selectPendenteAbs) {
-        selectPendenteAbs.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            if (selectedOption && selectedOption.value) {
-                const pedidoRef = selectedOption.dataset.pedido_ref;
-                const dataEmissao = selectedOption.dataset.data_emissao; // Formato YYYY-MM-DD HH:MM:SS
-                const filialPendente = selectedOption.dataset.filial;
-
-                if(pedidoRefDisplayAbs) pedidoRefDisplayAbs.value = pedidoRef || 'N/A';
-                if(filialDisplayAbs) filialDisplayAbs.value = filialPendente || 'N/A';
-                
-                if(dataEmissaoDisplayAbs) {
-                    if (dataEmissao) {
-                        try {
-                            const datePart = dataEmissao.split(' ')[0];
-                            const [year, month, day] = datePart.split('-');
-                            dataEmissaoDisplayAbs.value = `${day}/${month}/${year}`;
-                        } catch (e) {
-                            dataEmissaoDisplayAbs.value = dataEmissao; // Fallback
-                        }
-                    } else {
-                        dataEmissaoDisplayAbs.value = 'N/A';
-                    }
-                }
-                
-                if(filialInputCobrancaAbs && filialPendente && filialPendente !== 'N/A') {
-                    filialInputCobrancaAbs.value = filialPendente; // Preenche o campo editável
-                    filialInputCobrancaAbs.placeholder = `Default: ${filialPendente}`;
-                } else if (filialInputCobrancaAbs) {
-                     filialInputCobrancaAbs.placeholder = 'Filial da Pendente não disponível';
-                     filialInputCobrancaAbs.value = ''; // Limpa se não houver filial na pendente
-                }
-
-            } else { // "Selecione um Pedido..."
-                if(pedidoRefDisplayAbs) pedidoRefDisplayAbs.value = '';
-                if(filialDisplayAbs) filialDisplayAbs.value = '';
-                if(dataEmissaoDisplayAbs) dataEmissaoDisplayAbs.value = '';
-                if(filialInputCobrancaAbs) {
-                    filialInputCobrancaAbs.value = '';
-                    filialInputCobrancaAbs.placeholder = 'Filial para Cobrança';
-                }
-            }
-        });
-        if (selectPendenteAbs.value) { // Disparar no carregamento se já houver seleção
-            selectPendenteAbs.dispatchEvent(new Event('change'));
-        }
-    }
-});
+// O JavaScript para mostrar detalhes de uma única pendente foi removido
+// pois a seleção múltipla não se beneficia dele da mesma forma.
 </script>
 {% endblock %}

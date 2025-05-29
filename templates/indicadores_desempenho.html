@@ -26,13 +26,14 @@
         flex-direction: column;
         justify-content: space-between;
         transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        min-height: 180px; 
     }
     .kpi-card:hover {
         transform: translateY(-3px);
         box-shadow: var(--shadow-md);
     }
     .kpi-card .icon {
-        font-size: 2rem;
+        font-size: 1.8rem; 
         margin-bottom: 0.8rem;
         color: var(--primary-color);
         width: 40px;
@@ -46,9 +47,13 @@
     html[data-theme="noite"] .kpi-card .icon {
         background-color: var(--primary-dark-color); 
     }
+     html[data-theme="noite"] .kpi-card .icon .fas {
+        color: var(--card-bg); 
+    }
+
 
     .kpi-card h3 {
-        font-size: 1rem;
+        font-size: 0.9rem; 
         font-weight: 600;
         color: var(--text-muted-color);
         margin-bottom: 0.5rem;
@@ -56,16 +61,37 @@
         letter-spacing: 0.5px;
     }
     .kpi-card .value {
-        font-size: 2.2rem;
+        font-size: 2rem; 
         font-weight: 700;
         color: var(--text-color);
         margin-bottom: 0.2rem;
         line-height: 1.2;
     }
     .kpi-card .unit {
-        font-size: 0.9rem;
+        font-size: 0.85rem; 
         color: var(--text-muted-color);
+        margin-left: 0.2rem;
     }
+    .kpi-description { 
+        font-size: 0.8rem;
+        color: var(--text-muted-color);
+        margin-top: 0.5rem;
+        line-height: 1.4;
+        flex-grow: 1; 
+    }
+     .kpi-link { 
+        font-size: 0.8rem; 
+        color: var(--link-color); 
+        text-decoration: none; 
+        font-weight: 500; 
+        margin-top: auto; 
+        display: inline-block; 
+        padding-top: 0.5rem;
+    }
+    .kpi-link:hover { color: var(--link-hover-color); text-decoration: underline; }
+    .kpi-link .fa-xs { font-size: 0.8em; } 
+
+
     .chart-container {
         background-color: var(--card-bg);
         padding: 1.5rem;
@@ -73,9 +99,7 @@
         box-shadow: var(--shadow-sm);
         border: 1px solid var(--card-border-color);
         margin-bottom: 1.5rem;
-        height: 320px; /* MUDANÇA: Definindo uma altura fixa para o container */
-                     /* Ou pode usar min-height se preferir que cresça mais com conteúdo interno (ex: legenda muito grande) */
-                     /* Alternativamente, poderia usar aspect-ratio aqui se o Chart.js mantivesse o aspect ratio */
+        height: 320px; 
     }
     .chart-container h4 {
         font-size: 1.1rem;
@@ -105,10 +129,12 @@
     }
     .filter-form-row .form-group {
         flex-grow: 1;
-        min-width: 200px; 
+        min-width: 180px; /* Ajustado para dar mais espaço */
     }
     .filter-form-row .form-group label {
         font-weight: 500;
+        display: block; /* Garante que o label fique acima do input */
+        margin-bottom: .3rem;
     }
     .filter-form-row .btn-primary, .filter-form-row .btn-secondary {
         height: calc(1.5em + .75rem + 2px); 
@@ -117,6 +143,7 @@
     .flatpickr-input {
         background-color: var(--input-bg) !important;
         color: var(--input-text-color) !important;
+        border: 1px solid var(--input-border-color) !important;
     }
 </style>
 {% endblock %}
@@ -127,16 +154,25 @@
 </div>
 
 <div class="filters-container">
-    <h3><i class="fas fa-filter"></i> Filtrar Período</h3>
+    <h3><i class="fas fa-filter"></i> Filtrar Período e Filial</h3>
     <form method="GET" action="{{ url_for('indicadores_desempenho') }}">
         <div class="filter-form-row">
             <div class="form-group">
                 <label for="data_de">De:</label>
-                <input type="text" id="data_de" name="data_de" class="form-control flatpickr-input" placeholder="DD/MM/AAAA" value="{{ filtros_data.data_de_fmt or filtros_data.data_de or '' }}">
+                <input type="text" id="data_de" name="data_de" class="form-control flatpickr-input" placeholder="DD/MM/AAAA" value="{{ filtros_data.data_de or '' }}">
             </div>
             <div class="form-group">
                 <label for="data_ate">Até:</label>
-                <input type="text" id="data_ate" name="data_ate" class="form-control flatpickr-input" placeholder="DD/MM/AAAA" value="{{ filtros_data.data_ate_fmt or filtros_data.data_ate or '' }}">
+                <input type="text" id="data_ate" name="data_ate" class="form-control flatpickr-input" placeholder="DD/MM/AAAA" value="{{ filtros_data.data_ate or '' }}">
+            </div>
+            <div class="form-group">
+                <label for="filial_filtro">Filial:</label>
+                <select name="filial_filtro" id="filial_filtro" class="form-control">
+                    <option value="">Todas as Filiais</option>
+                    {% for filial in lista_filiais %}
+                        <option value="{{ filial }}" {% if filial == filial_selecionada_atual %}selected{% endif %}>{{ filial }}</option>
+                    {% endfor %}
+                </select>
             </div>
             <div class="form-group">
                 <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Aplicar</button>
@@ -144,6 +180,9 @@
             </div>
         </div>
     </form>
+     <p class="small text-muted mt-2">
+        Nota: O filtro de data considera a "Data de Emissão do Pedido" para cobranças e "Data de Emissão" para pendências.
+    </p>
 </div>
 
 
@@ -153,6 +192,7 @@
         <div>
             <h3>Taxa de Cobrança Efetuada</h3>
             <p class="value">{{ kpis.taxa_cobranca_efetuada if kpis.taxa_cobranca_efetuada != 'N/D' else '0.00' }}<span class="unit">%</span></p>
+            <p class="kpi-description">Pedidos com cobrança vs. total de pedidos no período.</p>
         </div>
     </div>
     <div class="kpi-card">
@@ -160,13 +200,15 @@
         <div>
             <h3>% de Pedidos Não Conforme</h3>
             <p class="value">{{ kpis.percentual_nao_conforme if kpis.percentual_nao_conforme != 'N/D' else '0.00' }}<span class="unit">%</span></p>
+            <p class="kpi-description">Pedidos com conformidade "Verificar" vs. total no período.</p>
         </div>
     </div>
     <div class="kpi-card">
         <div class="icon"><i class="fas fa-hourglass-half"></i></div>
         <div>
-            <h3>Tempo Médio de Resolução (Pendências)</h3>
+            <h3>Tempo Médio de Resolução</h3>
             <p class="value">{{ kpis.tempo_medio_resolucao if kpis.tempo_medio_resolucao != 'N/D' else '0' }}<span class="unit">dias</span></p>
+            <p class="kpi-description">Tempo médio para finalizar pendências no período.</p>
         </div>
     </div>
     <div class="kpi-card">
@@ -174,6 +216,7 @@
         <div>
             <h3>Valor Total de Pendências Ativas</h3>
             <p class="value">{{ kpis.valor_total_pendencias | format_currency }}</p>
+            <p class="kpi-description">Soma dos valores de pendências com status "Pendente" no período.</p>
         </div>
     </div>
     <div class="kpi-card">
@@ -181,6 +224,7 @@
         <div>
             <h3>Valor Investido em Abastecimentos</h3>
             <p class="value">{{ kpis.get('valor_investido_abastecimento', 0.0) | format_currency }}</p>
+            <p class="kpi-description">Soma dos valores de pendências finalizadas e lançadas como "Abastecimento" no período.</p>
         </div>
     </div>
     <div class="kpi-card">
@@ -188,6 +232,15 @@
         <div>
             <h3>Valor Investido em Estoque</h3>
             <p class="value">{{ kpis.get('valor_investido_estoque', 0.0) | format_currency }}</p>
+            <p class="kpi-description">Soma dos valores de pendências finalizadas e lançadas como "Estoque" no período.</p>
+        </div>
+    </div>
+     <div class="kpi-card">
+        <div class="icon"><i class="fas fa-cogs"></i></div>
+        <div>
+            <h3>Valor Investido em Outros</h3>
+            <p class="value">{{ kpis.get('valor_investido_outros', 0.0) | format_currency }}</p>
+            <p class="kpi-description">Soma dos valores de pendências finalizadas e lançadas como "Outros" no período.</p>
         </div>
     </div>
 </div>
@@ -196,14 +249,12 @@
     <div class="col-lg-7 mb-4">
         <div class="chart-container">
             <h4><i class="fas fa-chart-line"></i> Evolução (Cobranças vs Pendências)</h4>
-             {# MUDANÇA: Removido atributo height do canvas #}
             <canvas id="evolucaoChart"></canvas> 
         </div>
     </div>
     <div class="col-lg-5 mb-4">
         <div class="chart-container">
             <h4><i class="fas fa-chart-pie"></i> Distribuição de Status (Cobranças)</h4>
-             {# MUDANÇA: Removido atributo height do canvas #}
             <canvas id="statusCobrancaChart"></canvas>
         </div>
     </div>
@@ -250,9 +301,11 @@ document.addEventListener('DOMContentLoaded', function () {
             if (suggestedMaxEvolucao <= maxEvolucaoValor) { 
                 suggestedMaxEvolucao = maxEvolucaoValor + 1;
             }
-            suggestedMaxEvolucao = Math.max(suggestedMaxEvolucao, 5);
+            suggestedMaxEvolucao = Math.max(suggestedMaxEvolucao, 5); // Garante um mínimo de 5 se houver dados
         }
-        let stepSizeY = (suggestedMaxEvolucao > 0 && suggestedMaxEvolucao <= 10 && maxEvolucaoValor > 0) ? 1 : undefined;
+        
+        // Define stepSize apenas se o máximo for pequeno, para evitar muitos ticks
+        let stepSizeY = (suggestedMaxEvolucao > 0 && suggestedMaxEvolucao <= 10) ? 1 : undefined;
 
 
         new Chart(evolucaoCtx, {
@@ -281,7 +334,7 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false, // Crucial para que a altura do container seja respeitada
+                maintainAspectRatio: false,
                 scales: {
                     y: { 
                         beginAtZero: true,
@@ -344,7 +397,7 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false, // Permite que a altura do container seja usada
+                maintainAspectRatio: false, 
                 plugins: { 
                     legend: { 
                         position: 'top',

@@ -41,6 +41,7 @@ from utils.excel_processor import (
     get_kpi_tempo_medio_resolucao_pendencias,
     get_kpi_valor_investido_abastecimento,
     get_kpi_valor_investido_estoque,
+    get_kpi_valor_investido_outros, 
     get_evolucao_mensal_cobrancas_pendencias,
     get_distribuicao_status_cobranca,
     add_or_update_cobranca_manual,
@@ -290,12 +291,11 @@ def indicadores_desempenho():
     
     data_de_input = request.args.get('data_de', None) 
     data_ate_input = request.args.get('data_ate', None)
+    filial_selecionada_filtro = request.args.get('filial_filtro', None)
 
     data_de_para_sql = None
     data_ate_para_sql = None
     
-    # As datas para o template serão as que o Flatpickr espera no 'value' (YYYY-MM-DD)
-    # se forem válidas, ou o input original do usuário se inválidas.
     data_de_para_template = data_de_input 
     data_ate_para_template = data_ate_input 
 
@@ -303,35 +303,33 @@ def indicadores_desempenho():
 
     if data_de_input:
         try:
-            # Flatpickr com altInput envia no formato altFormat (Y-m-d)
             data_de_obj = datetime.strptime(data_de_input, '%Y-%m-%d')
             data_de_para_sql = data_de_input
-            data_de_para_template = data_de_input # Já está no formato correto para o value do flatpickr
         except ValueError:
-            # Se falhar, tenta converter de d/m/Y (caso o altInput não funcione ou digitação manual)
             try:
                 data_de_obj = datetime.strptime(data_de_input, '%d/%m/%Y')
                 data_de_para_sql = data_de_obj.strftime('%Y-%m-%d')
-                data_de_para_template = data_de_para_sql # Atualiza para o formato correto para o value
+                # data_de_para_template já tem o input original (DD/MM/AAAA) se a conversão falhou antes
+                # mas se a conversão para AAAA-MM-DD foi bem sucedida, usamos esse para o value do flatpickr
+                # No entanto, o Flatpickr espera AAAA-MM-DD no value para converter para DD/MM/AAAA na exibição.
+                # Então, se a conversão for bem-sucedida, data_de_para_template também deve ser AAAA-MM-DD.
+                data_de_para_template = data_de_para_sql 
             except ValueError:
-                flash(f"Formato de 'Data De' ({data_de_input}) inválido. Use o seletor ou DD/MM/AAAA.", "warning")
+                flash(f"Formato de 'Data De' ({data_de_input}) inválido. Use o seletor ou AAAA-MM-DD.", "warning")
                 data_de_para_sql = None
-                # data_de_para_template já tem o input original
     
     if data_ate_input:
         try:
             data_ate_obj = datetime.strptime(data_ate_input, '%Y-%m-%d')
             data_ate_para_sql = data_ate_input
-            data_ate_para_template = data_ate_input
         except ValueError:
             try:
                 data_ate_obj = datetime.strptime(data_ate_input, '%d/%m/%Y')
                 data_ate_para_sql = data_ate_obj.strftime('%Y-%m-%d')
                 data_ate_para_template = data_ate_para_sql
             except ValueError:
-                flash(f"Formato de 'Data Até' ({data_ate_input}) inválido. Use o seletor ou DD/MM/AAAA.", "warning")
+                flash(f"Formato de 'Data Até' ({data_ate_input}) inválido. Use o seletor ou AAAA-MM-DD.", "warning")
                 data_ate_para_sql = None
-                # data_ate_para_template já tem o input original
 
     granularidade_grafico = 'mes' 
     if data_de_obj and data_ate_obj:
@@ -351,23 +349,34 @@ def indicadores_desempenho():
     kpis_data = {
         'taxa_cobranca_efetuada': "N/D", 'percentual_nao_conforme': "N/D", 
         'tempo_medio_resolucao': "N/D", 'valor_total_pendencias': 0.0,
-        'valor_investido_abastecimento': 0.0, 'valor_investido_estoque': 0.0
+        'valor_investido_abastecimento': 0.0, 'valor_investido_estoque': 0.0,
+        'valor_investido_outros': 0.0 
     }
     chart_data = {'evolucao_meses': [], 'evolucao_cobrancas': [], 'evolucao_pendencias': [], 'distribuicao_status_labels': [], 'distribuicao_status_valores': []}
+    
+    # Buscar filiais para o dropdown do filtro
+    filiais_cobrancas = get_distinct_values('filial', 'cobrancas', db_path)
+    filiais_pendentes = get_distinct_values('filial', 'pendentes', db_path) # Para KPIs de pendentes
+    # Combina e remove duplicatas, depois ordena
+    todas_as_filiais = sorted(list(set(filiais_cobrancas + filiais_pendentes)))
+
+
     try:
-        kpis_data['taxa_cobranca_efetuada'] = get_kpi_taxa_cobranca_efetuada(db_path, data_de_para_sql, data_ate_para_sql)
-        kpis_data['percentual_nao_conforme'] = get_kpi_percentual_nao_conforme(db_path, data_de_para_sql, data_ate_para_sql)
-        kpis_data['valor_total_pendencias'] = get_kpi_valor_total_pendencias_ativas(db_path, data_de_para_sql, data_ate_para_sql)
-        kpis_data['tempo_medio_resolucao'] = get_kpi_tempo_medio_resolucao_pendencias(db_path, data_de_para_sql, data_ate_para_sql)
-        kpis_data['valor_investido_abastecimento'] = get_kpi_valor_investido_abastecimento(db_path, data_de_para_sql, data_ate_para_sql)
-        kpis_data['valor_investido_estoque'] = get_kpi_valor_investido_estoque(db_path, data_de_para_sql, data_ate_para_sql)
+        kpis_data['taxa_cobranca_efetuada'] = get_kpi_taxa_cobranca_efetuada(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
+        kpis_data['percentual_nao_conforme'] = get_kpi_percentual_nao_conforme(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
+        kpis_data['valor_total_pendencias'] = get_kpi_valor_total_pendencias_ativas(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
+        kpis_data['tempo_medio_resolucao'] = get_kpi_tempo_medio_resolucao_pendencias(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
+        kpis_data['valor_investido_abastecimento'] = get_kpi_valor_investido_abastecimento(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
+        kpis_data['valor_investido_estoque'] = get_kpi_valor_investido_estoque(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
+        kpis_data['valor_investido_outros'] = get_kpi_valor_investido_outros(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
         
-        evolucao_dados = get_evolucao_mensal_cobrancas_pendencias(db_path, data_de_para_sql, data_ate_para_sql, granularidade=granularidade_grafico)
+        evolucao_dados = get_evolucao_mensal_cobrancas_pendencias(db_path, data_de_para_sql, data_ate_para_sql, granularidade=granularidade_grafico, filial_filtro=filial_selecionada_filtro)
         if evolucao_dados: 
             chart_data['evolucao_meses'] = evolucao_dados.get('labels', []) 
             chart_data['evolucao_cobrancas'] = evolucao_dados.get('cobrancas_data', [])
             chart_data['evolucao_pendencias'] = evolucao_dados.get('pendencias_data', [])
-        dist_status_dados = get_distribuicao_status_cobranca(db_path, data_de_para_sql, data_ate_para_sql)
+        
+        dist_status_dados = get_distribuicao_status_cobranca(db_path, data_de_para_sql, data_ate_para_sql, filial_filtro=filial_selecionada_filtro)
         if dist_status_dados: 
             chart_data['distribuicao_status_labels'] = [item['status'] for item in dist_status_dados]
             chart_data['distribuicao_status_valores'] = [item['total'] for item in dist_status_dados]
@@ -375,9 +384,14 @@ def indicadores_desempenho():
         logger.error(f"Erro ao calcular KPIs/dados de gráfico: {e}", exc_info=True)
         flash("Erro ao calcular indicadores ou dados para gráficos.", "warning")
     
-    return render_template('indicadores_desempenho.html', kpis=kpis_data, chart_data=chart_data,
+    return render_template('indicadores_desempenho.html', 
+                           kpis=kpis_data, 
+                           chart_data=chart_data,
                            filtros_data={'data_de': data_de_para_template or '', 
-                                         'data_ate': data_ate_para_template or ''})
+                                         'data_ate': data_ate_para_template or ''},
+                           lista_filiais=todas_as_filiais,
+                           filial_selecionada_atual=filial_selecionada_filtro # Renomeado para clareza
+                           )
 
 
 # --- NOVAS ROTAS ---
@@ -442,13 +456,14 @@ def integrar_os():
                         'status': dados_nova_os['status_cobranca'], 
                         'conformidade': dados_nova_os['conformidade'],
                         'filial': dados_nova_os['filial'] if dados_nova_os['filial'] else pendente_original['filial'],
-                        'data_emissao_pedido': pendente_original['data_emissao'] 
+                        'data_emissao_pedido': pendente_original['data_emissao'] # Usar data_emissao da pendente
                     }
                     success, message = add_or_update_cobranca_manual(dados_cobranca_para_vincular, app.config['DATABASE'])
                     flash(message, "success" if success else "error")
                     if success:
                         log_audit("OS_VINCULADA_A_PENDENTE", f"Pendente ID: {id_pendente_selecionada}, Pedido: {pendente_original['pedido_ref']}, Nova OS: {dados_nova_os['os']}")
-                        return redirect(url_for('relatorio_cobrancas', filtro_pedido=pendente_original['pedido_ref'], filtro_os=dados_nova_os['os']))
+                        pendentes_finalizadas_lista = get_pendentes_finalizadas_para_selecao(app.config['DATABASE']) 
+                        form_data_vincular = {} 
     
     return render_template('integrar_os.html', 
                            form_data_manual=form_data_manual, 
@@ -458,21 +473,28 @@ def integrar_os():
 @app.route('/abastecimento-estoque', methods=['GET', 'POST'])
 @login_required
 def abastecimento_estoque():
-    form_data = {} 
+    form_data_repop = {} 
     pendentes_finalizadas_lista = get_pendentes_finalizadas_para_selecao(app.config['DATABASE'])
 
     if request.method == 'POST':
-        form_data = request.form 
+        form_data_repop = request.form 
         
         ids_pendentes_selecionadas = request.form.getlist('ids_pendentes_selecionadas')
         categoria_custo = request.form.get('categoria_custo') 
         placa_opcional = request.form.get('placa', '').strip().upper() or "N/A"
         filial_opcional = request.form.get('filial', '').strip()
 
-        if not ids_pendentes_selecionadas or not categoria_custo:
-            flash("Selecione um ou mais Pedidos Finalizados e uma Categoria de Custo.", "error")
+        errors = []
+        if not ids_pendentes_selecionadas:
+            errors.append("Pelo menos um Pedido Finalizado deve ser selecionado.")
+        if not categoria_custo:
+            errors.append("Uma Categoria de Custo deve ser selecionada.")
+        
+        if errors:
+            for error in errors:
+                flash(error, "error")
         else:
-            sucessos = 0; falhas = 0; os_criadas = []
+            sucessos = 0; falhas = 0
             for pendente_id_str in ids_pendentes_selecionadas:
                 try:
                     id_pendente = int(pendente_id_str)
@@ -490,11 +512,11 @@ def abastecimento_estoque():
                         'status': "Com cobrança",
                         'conformidade': "Conforme", 
                         'filial': filial_opcional if filial_opcional else pendente_original['filial'],
-                        'data_emissao_pedido': pendente_original['data_emissao']
+                        'data_emissao_pedido': pendente_original['data_emissao'] # Data de emissão da pendente
                     }
                     success, message = add_or_update_cobranca_manual(dados_cobranca, app.config['DATABASE'])
                     if success:
-                        sucessos += 1; os_criadas.append(dados_cobranca['os'])
+                        sucessos += 1
                         log_audit(f"CUSTO_LANCADO_{categoria_custo.upper()}", f"Pedido: {pendente_original['pedido_ref']}, OS: {categoria_custo}")
                     else:
                         falhas += 1
@@ -506,18 +528,16 @@ def abastecimento_estoque():
                     flash(f"Erro inesperado ao processar pendente ID {pendente_id_str}.", "error"); falhas +=1
 
             if sucessos > 0: flash(f"{sucessos} custo(s) de '{categoria_custo}' lançado(s) com sucesso!", "success")
-            if falhas > 0: flash(f"{falhas} lançamento(s) de custo falharam. Verifique as mensagens.", "warning")
+            if falhas > 0 and sucessos == 0 : flash(f"{falhas} lançamento(s) de custo falharam. Verifique as mensagens.", "warning")
+            elif falhas > 0 and sucessos > 0 : flash(f"Alguns lançamentos falharam ({falhas}). Verifique as mensagens.", "warning")
             
+            pendentes_finalizadas_lista = get_pendentes_finalizadas_para_selecao(app.config['DATABASE']) 
             if sucessos > 0 and falhas == 0: 
-                primeiro_pedido_processado = get_pendente_by_id_para_vinculo(int(ids_pendentes_selecionadas[0]), app.config['DATABASE'])['pedido_ref'] if ids_pendentes_selecionadas else None
-                if primeiro_pedido_processado:
-                    return redirect(url_for('relatorio_cobrancas', filtro_pedido=primeiro_pedido_processado, filtro_os=categoria_custo))
-                else:
-                    return redirect(url_for('relatorio_cobrancas'))
+                form_data_repop = {} 
             
     return render_template('abastecimento_estoque.html', 
                            pendentes_finalizadas_lista=pendentes_finalizadas_lista,
-                           form_data=form_data) 
+                           form_data=form_data_repop) 
 
 
 # --- CRUD para Cobranças ---
