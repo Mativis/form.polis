@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Cobranças - Pólis (Visualização para Impressão)</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='pdf_style.css') }}">
+    <style>
+        .report-logo {
+            max-height: 50px;
+            margin-bottom: 15px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        @media print {
+            body { margin: 0.5cm; font-size: 8pt; /* Fonte menor para caber mais colunas */ color: #000; }
+            .container { width: 100%; }
+            .report-header, .filter-summary, table, .footer-note { page-break-inside: avoid; }
+            thead { display: table-header-group; }
+            a { text-decoration: none; color: inherit; }
+            .btn-voltar-print { display: none !important; }
+        }
+        .btn-voltar-print {
+            display: inline-block; margin-bottom: 20px; padding: 8px 15px;
+            background-color: #6c757d; color: white; text-decoration: none;
+            border-radius: 5px; font-size: 0.9em;
+        }
+        .btn-voltar-print i { margin-right: 5px; }
+        th, td { font-size: 7pt; padding: 3px 5px; } /* Ainda menor para muitas colunas */
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% if pagina_anterior_url %}
+            <a href="{{ pagina_anterior_url }}" class="btn-voltar-print">
+                <i class="fas fa-arrow-left"></i> {{ pagina_anterior_texto | default('Voltar') }}
+            </a>
+        {% endif %}
+
+        <div class="report-header">
+            <img src="{{ url_for('static', filename='images/polis_logo.png') }}" alt="Logótipo Pólis" class="report-logo">
+            <h1>Relatório de Cobranças</h1>
+        </div>
+        <div class="report-info">
+            <p><strong>Gerado por:</strong> {{ usuario_gerador }}</p>
+            <p><strong>Data de Geração:</strong> {{ data_geracao }}</p>
+        </div>
+
+        {% if filtros and (filtros.pedido or filtros.os or filtros.status or filtros.filial or filtros.placa or filtros.conformidade or filtros.data_emissao_de or filtros.data_emissao_ate) %}
+        <div class="filter-summary">
+            <h3>Filtros Aplicados:</h3>
+            <ul>
+                {% if filtros.pedido %}<li><strong>Pedido:</strong> {{ filtros.pedido }}</li>{% endif %}
+                {% if filtros.os %}<li><strong>OS:</strong> {{ filtros.os }}</li>{% endif %}
+                {% if filtros.placa %}<li><strong>Placa:</strong> {{ filtros.placa }}</li>{% endif %}
+                {% if filtros.filial %}<li><strong>Filial:</strong> {{ filtros.filial }}</li>{% endif %}
+                {% if filtros.status %}<li><strong>Status:</strong> {{ filtros.status }}</li>{% endif %}
+                {% if filtros.conformidade %}<li><strong>Conformidade:</strong> {{ filtros.conformidade }}</li>{% endif %}
+                {% if filtros.data_emissao_de %}<li><strong>Data Emissão De:</strong> {{ filtros.data_emissao_de | format_date_br }}</li>{% endif %}
+                {% if filtros.data_emissao_ate %}<li><strong>Data Emissão Até:</strong> {{ filtros.data_emissao_ate | format_date_br }}</li>{% endif %}
+            </ul>
+        </div>
+        {% else %}
+            <p class="filter-summary">Nenhum filtro aplicado.</p>
+        {% endif %}
+
+        {% if cobrancas %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Pedido</th>
+                        <th>OS</th>
+                        <th>Filial</th>
+                        <th>Placa</th>
+                        <th>Transportadora</th>
+                        <th>Conformidade</th>
+                        <th>Status</th>
+                        <th>Data Emissão Ped.</th>
+                        <th>Importado em</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cobranca in cobrancas %}
+                    <tr>
+                        <td>{{ cobranca.id }}</td>
+                        <td>{{ cobranca.pedido | default('N/A') }}</td>
+                        <td>{{ cobranca.os | default('N/A') }}</td>
+                        <td>{{ cobranca.filial | default('N/A') }}</td>
+                        <td>{{ cobranca.placa | default('N/A') }}</td>
+                        <td>{{ cobranca.transportadora | default('N/A') }}</td>
+                        <td>{{ cobranca.conformidade | default('N/A') }}</td>
+                        <td>{{ cobranca.status | default('N/A') }}</td>
+                        <td>{{ cobranca.data_emissao_pedido_fmt | default('N/A') }}</td>
+                        <td>{{ cobranca.data_importacao_fmt | default('N/A') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="no-data">Nenhuma cobrança encontrada com os filtros aplicados.</p>
+        {% endif %}
+        <p class="footer-note">Relatório gerado pelo Sistema Pólis.</p>
+    </div>
+</body>
+</html>

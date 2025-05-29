@@ -23,7 +23,7 @@
              color: var(--text-muted-color);
         }
         
-        /* Estilos para Dropdown na Navegação */
+        /* Estilos para Dropdown na Navegação (mantidos e ajustados) */
         .main-nav .nav-item.dropdown { 
             position: relative; 
         }
@@ -33,22 +33,22 @@
             top: 100%; 
             left: 0; 
             z-index: 1000;
-            min-width: 240px; 
+            min-width: 250px; /* Aumentado para melhor acomodar textos mais longos */
             padding: 0.5rem 0;
-            margin: 2px 0 0; 
+            margin: 1px 0 0; /* Ajuste fino para evitar sobreposição com a borda do item pai */
             font-size: 0.9rem;
             color: var(--text-color);
             text-align: left;
             list-style: none;
-            background-color: var(--card-bg); 
+            background-color: var(--main-nav-dropdown-bg); 
             background-clip: padding-box;
-            border: 1px solid var(--card-border-color);
+            border: 1px solid var(--main-nav-dropdown-border-color);
             border-radius: 0 0 var(--border-radius-base) var(--border-radius-base); 
-            box-shadow: var(--box-shadow-md);
+            box-shadow: var(--main-nav-dropdown-shadow);
             opacity: 0; 
             visibility: hidden; 
-            transform: translateY(10px); 
-            transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out, transform 0.2s ease-in-out;
+            transform: translateY(8px); 
+            transition: opacity 0.15s ease-out, visibility 0.15s ease-out, transform 0.15s ease-out;
         }
         
         .main-nav .nav-item-group-right .nav-item.dropdown .dropdown-menu {
@@ -56,14 +56,19 @@
             right: 0; 
         }
 
-        .main-nav .nav-item.dropdown:hover > .dropdown-menu,
-        .main-nav .nav-item.dropdown > .nav-item:focus + .dropdown-menu, 
-        .main-nav .nav-item.dropdown > .dropdown-menu:hover { 
+        .main-nav .nav-item.dropdown:hover > .dropdown-menu { 
             display: block; 
             opacity: 1;
             visibility: visible;
             transform: translateY(0);
         }
+         .main-nav .nav-item.dropdown > .dropdown-menu:hover { /* Mantém aberto se o rato estiver sobre o menu */
+            display: block;
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
         .main-nav .dropdown-item {
             display: block;
             width: 100%;
@@ -80,7 +85,7 @@
         }
         .main-nav .dropdown-item .fas { 
             margin-right: 0.75em; 
-            width: 1.4em; /* Ajustado para melhor alinhamento */
+            width: 1.4em; 
             text-align: center;
             color: var(--text-muted-color); 
         }
@@ -90,7 +95,7 @@
         .main-nav .dropdown-item:hover,
         .main-nav .dropdown-item:focus {
             color: var(--link-hover-color); 
-            background-color: var(--main-nav-dropdown-item-hover-bg); /* Usar variável de tema */
+            background-color: var(--main-nav-dropdown-item-hover-bg); 
         }
         .main-nav .dropdown-item.active,
         .main-nav .dropdown-item:active {
@@ -113,9 +118,9 @@
         }
         .dropdown-divider { 
             height: 0;
-            margin: .5rem 0;
+            margin: .4rem 0;
             overflow: hidden;
-            border-top: 1px solid var(--main-nav-dropdown-border-color); /* Usar variável de tema */
+            border-top: 1px solid var(--main-nav-dropdown-border-color); 
         }
     </style>
     {% endblock %}
@@ -176,6 +181,17 @@
                     <a class="dropdown-item {{ 'active' if request.endpoint == 'inserir_dados' else '' }}" href="{{ url_for('inserir_dados') }}"><i class="fas fa-file-upload"></i> Inserir Dados</a>
                 </div>
             </div>
+
+            {# NOVO MENU DROPDOWN: OPERAÇÕES #}
+            <div class="nav-item dropdown">
+                 <a href="#" class="nav-item {{ 'active' if request.endpoint in ['integrar_os', 'abastecimento_estoque'] else '' }}" onclick="event.preventDefault(); return false;">
+                    <i class="fas fa-cogs"></i> Operações
+                </a>
+                <div class="dropdown-menu">
+                    <a class="dropdown-item {{ 'active' if request.endpoint == 'integrar_os' else '' }}" href="{{ url_for('integrar_os') }}"><i class="fas fa-network-wired"></i> Integrar OS</a>
+                    <a class="dropdown-item {{ 'active' if request.endpoint == 'abastecimento_estoque' else '' }}" href="{{ url_for('abastecimento_estoque') }}"><i class="fas fa-gas-pump"></i> Abastecimento & Estoque</a>
+                </div>
+            </div>
             
             <div class="nav-item-group-right">
                 <div class="nav-item dropdown"> 
@@ -197,7 +213,7 @@
     {% endif %}
 
     <main class="container content-wrapper">
-        {# O bloco do botão Voltar foi removido globalmente #}
+        {# O botão Voltar foi removido globalmente #}
         
         {% block before_flash_messages %}{% endblock %}
         {% with messages = get_flashed_messages(with_categories=true) %}

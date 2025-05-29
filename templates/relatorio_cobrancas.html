@@ -1,113 +1,208 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <title>Relatório de Cobranças - Pólis (Visualização para Impressão)</title>
-    {# Referenciar o mesmo CSS usado para a impressão de pendentes ou um CSS geral de impressão #}
-    <link rel="stylesheet" href="{{ url_for('static', filename='pdf_style.css') }}">
-    <style>
-        /* Estilos específicos podem ser adicionados aqui, se necessário, */
-        /* mas idealmente o pdf_style.css deve ser genérico o suficiente. */
-        .report-logo {
-            max-height: 50px;
-            margin-bottom: 15px;
-            display: block;
-            margin-left: auto;
-            margin-right: auto;
-        }
-         /* Estilos específicos para impressão */
-        @media print {
-            body {
-                margin: 0.5cm; 
-                font-size: 9pt; /* Ajustar se necessário para caber mais colunas */
-                color: #000; 
-            }
-            .container { width: 100%; }
-            .report-header, .filter-summary, table, .footer-note { page-break-inside: avoid; }
-            thead { display: table-header-group; }
-            a { text-decoration: none; color: inherit; }
-            .btn-voltar-print { display: none !important; }
-        }
-        .btn-voltar-print {
-            display: inline-block; margin-bottom: 20px; padding: 8px 15px;
-            background-color: #6c757d; color: white; text-decoration: none;
-            border-radius: 5px; font-size: 0.9em;
-        }
-        .btn-voltar-print i { margin-right: 5px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        {% if pagina_anterior_url %}
-            <a href="{{ pagina_anterior_url }}" class="btn-voltar-print">
-                <i class="fas fa-arrow-left"></i> {{ pagina_anterior_texto | default('Voltar') }}
-            </a>
-        {% endif %}
+{% extends "base.html" %}
 
-        <div class="report-header">
-            <img src="{{ url_for('static', filename='images/polis_logo.png') }}" alt="Logótipo Pólis" class="report-logo">
-            <h1>Relatório de Cobranças</h1>
-        </div>
-        <div class="report-info">
-            <p><strong>Gerado por:</strong> {{ usuario_gerador }}</p>
-            <p><strong>Data de Geração:</strong> {{ data_geracao }}</p>
-        </div>
+{% block title %}Relatório de Cobranças{% endblock %}
 
-        {% if filtros and (filtros.pedido or filtros.os or filtros.status or filtros.filial or filtros.placa or filtros.conformidade or filtros.data_emissao_de or filtros.data_emissao_ate) %}
-        <div class="filter-summary">
-            <h3>Filtros Aplicados:</h3>
-            <ul>
-                {% if filtros.pedido %}<li><strong>Pedido:</strong> {{ filtros.pedido }}</li>{% endif %}
-                {% if filtros.os %}<li><strong>OS:</strong> {{ filtros.os }}</li>{% endif %}
-                {% if filtros.placa %}<li><strong>Placa:</strong> {{ filtros.placa }}</li>{% endif %}
-                {% if filtros.filial %}<li><strong>Filial:</strong> {{ filtros.filial }}</li>{% endif %}
-                {% if filtros.status %}<li><strong>Status:</strong> {{ filtros.status }}</li>{% endif %}
-                {% if filtros.conformidade %}<li><strong>Conformidade:</strong> {{ filtros.conformidade }}</li>{% endif %}
-                {% if filtros.data_emissao_de %}<li><strong>Data Emissão De:</strong> {{ filtros.data_emissao_de | format_date_br }}</li>{% endif %}
-                {% if filtros.data_emissao_ate %}<li><strong>Data Emissão Até:</strong> {{ filtros.data_emissao_ate | format_date_br }}</li>{% endif %}
-            </ul>
-        </div>
-        {% else %}
-            <p class="filter-summary">Nenhum filtro aplicado.</p>
-        {% endif %}
+{% block content %}
+    {# O botão Voltar é tratado pelo base.html se as variáveis forem passadas pela rota #}
+    <h2 class="page-title"><i class="fas fa-file-invoice-dollar"></i> Relatório de Cobranças</h2>
 
-        {% if cobrancas %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Pedido</th>
-                        <th>OS</th>
-                        <th>Filial</th>
-                        <th>Placa</th>
-                        <th>Transportadora</th>
-                        <th>Conformidade</th>
-                        <th>Status</th>
-                        <th>Data Emissão Ped.</th>
-                        <th>Importado em</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for cobranca in cobrancas %}
-                    <tr>
-                        <td>{{ cobranca.id }}</td>
-                        <td>{{ cobranca.pedido | default('N/A') }}</td>
-                        <td>{{ cobranca.os | default('N/A') }}</td>
-                        <td>{{ cobranca.filial | default('N/A') }}</td>
-                        <td>{{ cobranca.placa | default('N/A') }}</td>
-                        <td>{{ cobranca.transportadora | default('N/A') }}</td>
-                        <td>{{ cobranca.conformidade | default('N/A') }}</td>
-                        <td>{{ cobranca.status | default('N/A') }}</td>
-                        <td>{{ cobranca.data_emissao_pedido_fmt | default('N/A') }}</td>
-                        <td>{{ cobranca.data_importacao_fmt | default('N/A') }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <p class="no-data">Nenhuma cobrança encontrada com os filtros aplicados.</p>
-        {% endif %}
-        <p class="footer-note">Relatório gerado pelo Sistema Pólis.</p>
+    <div class="card filter-form mb-4">
+        <div class="card-header">
+            <h3><i class="fas fa-filter"></i> Filtrar Cobranças</h3>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('relatorio_cobrancas') }}" id="cobrancasFilterForm" class="form-inline">
+                <div class="form-group">
+                    <label for="filtro_pedido">Pedido:</label>
+                    <input type="text" name="filtro_pedido" id="filtro_pedido" value="{{ filtros.pedido or '' }}" class="form-control form-control-sm">
+                </div>
+                <div class="form-group">
+                    <label for="filtro_os">OS:</label>
+                    <input type="text" name="filtro_os" id="filtro_os" value="{{ filtros.os or '' }}" class="form-control form-control-sm">
+                </div>
+                 <div class="form-group">
+                    <label for="filtro_placa">Placa:</label>
+                    <input type="text" name="filtro_placa" id="filtro_placa" value="{{ filtros.placa or '' }}" class="form-control form-control-sm">
+                </div>
+                <div class="form-group">
+                    <label for="filtro_filial">Filial:</label>
+                     <select name="filtro_filial" id="filtro_filial" class="form-control form-control-sm">
+                        <option value="">Todas</option>
+                        {% for filial_val in distinct_filiais %}
+                            <option value="{{ filial_val }}" {% if filtros.filial == filial_val %}selected{% endif %}>{{ filial_val }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="filtro_status">Status:</label>
+                    <select name="filtro_status" id="filtro_status" class="form-control form-control-sm">
+                        <option value="">Todos</option>
+                        {% for status_val in distinct_status %}
+                            <option value="{{ status_val }}" {% if filtros.status == status_val %}selected{% endif %}>{{ status_val }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="filtro_conformidade">Conformidade:</label>
+                    <select name="filtro_conformidade" id="filtro_conformidade" class="form-control form-control-sm">
+                        <option value="">Todas</option>
+                        {% for conf_val in distinct_conformidade %}
+                            <option value="{{ conf_val }}" {% if filtros.conformidade == conf_val %}selected{% endif %}>{{ conf_val }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                 <div class="form-group">
+                    <label for="filtro_data_emissao_de">Data Emissão De:</label>
+                    <input type="date" name="filtro_data_emissao_de" id="filtro_data_emissao_de" value="{{ filtros.data_emissao_de or '' }}" class="form-control form-control-sm">
+                </div>
+                <div class="form-group">
+                    <label for="filtro_data_emissao_ate">Data Emissão Até:</label>
+                    <input type="date" name="filtro_data_emissao_ate" id="filtro_data_emissao_ate" value="{{ filtros.data_emissao_ate or '' }}" class="form-control form-control-sm">
+                </div>
+                <div class="form-group-actions">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Filtrar</button>
+                    <a href="{{ url_for('relatorio_cobrancas') }}" class="btn btn-secondary btn-sm"><i class="fas fa-times-circle"></i> Limpar</a>
+                    <button type="button" onclick="exportarCobrancasExcel()" class="btn btn-success btn-sm">
+                        <i class="fas fa-file-excel"></i> Exportar Excel
+                    </button>
+                    {# NOVO BOTÃO DE VISUALIZAR IMPRESSÃO #}
+                    <button type="button" onclick="visualizarImpressaoCobrancas()" class="btn btn-info btn-sm">
+                        <i class="fas fa-print"></i> Visualizar Impressão
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
-</body>
-</html>
+
+    <div class="card">
+        <div class="card-body table-responsive-container">
+            {% if cobrancas %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th class="col-id">ID</th>
+                                <th>Pedido</th>
+                                <th>OS</th>
+                                <th>Filial</th>
+                                <th>Placa</th>
+                                <th>Transportadora</th>
+                                <th class="col-conformidade">Conformidade</th>
+                                <th class="col-status">Status</th>
+                                <th class="col-date">Data Emissão Ped.</th> {# Nova Coluna #}
+                                <th class="col-date">Importado em</th>
+                                <th class="col-actions text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cobranca in cobrancas %}
+                            <tr>
+                                <td class="cell-id">{{ cobranca.id }}</td>
+                                <td>
+                                    {% if cobranca.pedido and cobranca.pedido != 'N/A' %}
+                                        <a href="https://sistema.transac.com.br/aSistema/pedido/visualizar/id/{{ cobranca.pedido }}" target="_blank" title="Visualizar Pedido no Transac: {{ cobranca.pedido }}">
+                                            {{ cobranca.pedido }} <i class="fas fa-external-link-alt fa-xs"></i>
+                                        </a>
+                                    {% else %}
+                                        {{ cobranca.pedido | default('N/A') }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if cobranca.os and cobranca.os != 'N/A' %}
+                                        <a href="https://sistema.transac.com.br/aSistema/os/visualizar/id/{{ cobranca.os }}" target="_blank" title="Visualizar OS no Transac: {{ cobranca.os }}">
+                                            {{ cobranca.os }} <i class="fas fa-external-link-alt fa-xs"></i>
+                                        </a>
+                                    {% else %}
+                                        {{ cobranca.os | default('N/A') }}
+                                    {% endif %}
+                                </td>
+                                <td>{{ cobranca.filial | default('N/A') }}</td>
+                                <td>{{ cobranca.placa | default('N/A') }}</td>
+                                <td>{{ cobranca.transportadora | default('N/A') }}</td>
+                                <td class="cell-conformidade">
+                                    <span class="badge badge-conformidade-{{ cobranca.conformidade | lower | default('desconhecida') | normalize_css }}">
+                                        {{ cobranca.conformidade | default('N/A') }}
+                                    </span>
+                                </td>
+                                <td class="cell-status">
+                                    <span class="badge status-{{ cobranca.status | lower | replace(' ', '-') | default('desconhecido') | normalize_css }}">
+                                        {{ cobranca.status | default('N/A') }}
+                                    </span>
+                                </td>
+                                <td class="cell-date">{{ cobranca.data_emissao_pedido_fmt | default('N/A') }}</td> {# Nova Coluna #}
+                                <td class="cell-date">{{ cobranca.data_importacao_fmt | default('N/A') }}</td>
+                                <td class="cell-actions text-center">
+                                    <a href="{{ url_for('edit_cobranca', cobranca_id=cobranca.id) }}" class="btn btn-sm btn-info" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <form method="POST" action="{{ url_for('delete_cobranca_route', cobranca_id=cobranca.id) }}" style="display: inline-block;" onsubmit="return confirm('Tem a certeza que deseja apagar esta cobrança? Esta ação não pode ser desfeita.');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-danger" title="Apagar">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-folder-open empty-icon"></i>
+                <p>Nenhuma cobrança encontrada com os filtros aplicados ou não há cobranças registadas.</p>
+            </div>
+            {% endif %}
+        </div> 
+    </div> 
+{% endblock %}
+
+{% block scripts_extra %}
+{{ super() }}
+<script>
+function exportarCobrancasExcel() {
+    const form = document.getElementById('cobrancasFilterForm'); 
+    const params = new URLSearchParams();
+    if (form.filtro_pedido.value) params.append('filtro_pedido', form.filtro_pedido.value);
+    if (form.filtro_os.value) params.append('filtro_os', form.filtro_os.value);
+    if (form.filtro_placa.value) params.append('filtro_placa', form.filtro_placa.value);
+    if (form.filtro_filial.value) params.append('filtro_filial', form.filtro_filial.value);
+    if (form.filtro_status.value) params.append('filtro_status', form.filtro_status.value);
+    if (form.filtro_conformidade.value) params.append('filtro_conformidade', form.filtro_conformidade.value);
+    if (form.filtro_data_emissao_de.value) params.append('filtro_data_emissao_de', form.filtro_data_emissao_de.value);
+    if (form.filtro_data_emissao_ate.value) params.append('filtro_data_emissao_ate', form.filtro_data_emissao_ate.value);
+    
+    const exportUrl = "{{ url_for('exportar_excel_cobrancas') }}?" + params.toString();
+    window.location.href = exportUrl;
+}
+
+// NOVA FUNÇÃO JAVASCRIPT PARA VISUALIZAR IMPRESSÃO
+function visualizarImpressaoCobrancas() {
+    const form = document.getElementById('cobrancasFilterForm');
+    const params = new URLSearchParams(new FormData(form));
+    const cleanParams = new URLSearchParams();
+    for (const [key, value] of params) { 
+        if (value && value.trim() !== '') { 
+            cleanParams.append(key, value);
+        }
+    }
+    // ATENÇÃO: 'imprimir_visualizacao_cobrancas' será a nova rota no app.py
+    window.open("{{ url_for('imprimir_visualizacao_cobrancas') }}?" + cleanParams.toString(), '_blank');
+}
+</script>
+{% endblock %}
+
+{% block head_extra %}
+{{ super() }}
+<style>
+    .form-control-sm { padding: 0.3rem 0.6rem; font-size: 0.875rem; height: calc(1.5em + .3rem + 2px); }
+    .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; line-height: 1.5; }
+    .col-actions { width: 100px; white-space: nowrap; }
+    .cell-actions .btn { margin: 0 2px; }
+    .fa-xs { font-size: 0.70em; margin-left: 3px; opacity: 0.7; }
+    .card-body.table-responsive-container { padding: 0; }
+    .card-body.table-responsive-container .table-responsive { margin-bottom: 0; border: none; border-radius: 0;}
+    .card-body.table-responsive-container .table { margin-bottom: 0; }
+    .card > .table-responsive { border-top-left-radius: 0; border-top-right-radius: 0;}
+</style>
+{% endblock %}

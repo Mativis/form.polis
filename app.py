@@ -39,13 +39,14 @@ from utils.excel_processor import (
     get_kpi_percentual_nao_conforme,
     get_kpi_valor_total_pendencias_ativas,
     get_kpi_tempo_medio_resolucao_pendencias,
-    get_evolucao_mensal_cobrancas_pendencias, # ATUALIZADO para aceitar granularidade
-    get_distribuicao_status_cobranca
+    get_evolucao_mensal_cobrancas_pendencias,
+    get_distribuicao_status_cobranca,
+    add_or_update_cobranca_manual # NOVA FUNÇÃO IMPORTADA
 )
 
 app = Flask(__name__)
 
-# --- Configurações, Logging, DB Helpers, Flask-Login, Decoradores, Log Auditoria, Filtros Jinja (mantidos) ---
+# --- Configurações, Logging, DB Helpers, Flask-Login, Decoradores, Log Auditoria, Filtros Jinja ---
 # ... (código mantido como na versão anterior - ID: app_py_kpis_v1)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(32))
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
@@ -159,7 +160,7 @@ def home(): return render_template('home.html')
 @app.route('/mundo-os') 
 @login_required
 def mundo_os():
-    return render_template('mundo_os.html', pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
+    return render_template('mundo_os.html') # Botão voltar removido, não precisa de args
 def allowed_file(filename): return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 @app.route('/inserir-dados', methods=['GET', 'POST'])
 @login_required
@@ -187,7 +188,7 @@ def inserir_dados():
                 try: os.remove(file_path)
                 except Exception as e_rem: logger.error(f"Erro ao remover '{file_path}': {e_rem}")
         return redirect(url_for('inserir_dados') + anchor)
-    return render_template('inserir_dados.html', pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
+    return render_template('inserir_dados.html')
 @app.route('/admin/add_user', methods=['GET', 'POST'])
 @admin_required
 def add_user_admin():
@@ -209,8 +210,8 @@ def add_user_admin():
             except Exception as e: logger.error(f"Erro DB/geral ao adicionar '{username}': {e}", exc_info=True); log_audit("ADMIN_ADD_USER_ERROR", f"Erro add '{username}': {e}"); flash('Erro ao adicionar. Tente novamente.', 'error')
         else:
             for error_msg in form_errors.values(): flash(error_msg, 'error')
-        return render_template('admin/add_user.html', username=form_data.get('username',''), form_errors=form_errors, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
-    return render_template('admin/add_user.html', username='', form_errors={}, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
+        return render_template('admin/add_user.html', username=form_data.get('username',''), form_errors=form_errors)
+    return render_template('admin/add_user.html', username='', form_errors={})
 @app.route('/alterar-senha', methods=['GET', 'POST'])
 @login_required
 def change_password():
@@ -234,7 +235,7 @@ def change_password():
             except Exception as e: logger.error(f"Erro DB/geral ao alterar senha para ID {current_user.id}: {e}", exc_info=True); log_audit("CHANGE_PASSWORD_ERROR", f"Erro ao alterar senha para '{current_user.username}': {e}"); flash('Erro ao alterar senha.', 'error')
         else:
             for msg in form_errors.values(): flash(msg, 'error')
-    return render_template('account/change_password.html', form_errors=form_errors, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
+    return render_template('account/change_password.html', form_errors=form_errors)
 
 @app.route('/dashboard-pedidos') 
 @login_required
@@ -253,9 +254,7 @@ def dashboard_pedidos():
                            count_sem_cobranca=count_sem_cobranca, count_lancados=count_lancados, count_nao_conforme=count_nao_conforme,
                            pedidos_sc_por_filial=pedidos_sc_por_filial, placas_sc=placas_sc, 
                            status_sem_cobranca_label=status_sem_cobranca,
-                           dashboard_title="Dashboard de Cobranças (por Pedido)",
-                           pagina_anterior_url=url_for('mundo_os'), 
-                           pagina_anterior_texto="Mundo de OS")
+                           dashboard_title="Dashboard de Cobranças (por Pedido)")
 
 @app.route('/dashboard-manutencao')
 @login_required
@@ -279,78 +278,86 @@ def dashboard_manutencao():
                            count_os_para_verificar=count_os_para_verificar,
                            os_sc_por_filial=os_sc_por_filial,
                            lista_os_sem_cobranca=lista_os_sem_cobranca,
-                           status_os_sem_cobranca_label=status_os_sem_cobranca,
-                           pagina_anterior_url=url_for('mundo_os'),
-                           pagina_anterior_texto="Mundo de OS")
+                           status_os_sem_cobranca_label=status_os_sem_cobranca)
 
 @app.route('/indicadores-desempenho')
 @login_required
 def indicadores_desempenho():
     db_path = app.config['DATABASE']
-    data_de_filtro = request.args.get('data_de', None)
-    data_ate_filtro = request.args.get('data_ate', None)
-    granularidade_padrao = 'mes' # Default para visualização mensal
-    num_periodos_padrao = 6     # Default para os últimos 6 períodos
-
-    # Validação simples de formato de data (YYYY-MM-DD)
-    # e determinar granularidade
+    data_de_filtro_str = request.args.get('data_de', None)
+    data_ate_filtro_str = request.args.get('data_ate', None)
     data_de_obj, data_ate_obj = None, None
-    if data_de_filtro:
-        try: data_de_obj = datetime.strptime(data_de_filtro, '%Y-%m-%d')
-        except ValueError: flash("Formato de 'Data De' inválido. Use AAAA-MM-DD.", "warning"); data_de_filtro = None
-    if data_ate_filtro:
-        try: data_ate_obj = datetime.strptime(data_ate_filtro, '%Y-%m-%d')
-        except ValueError: flash("Formato de 'Data Até' inválido. Use AAAA-MM-DD.", "warning"); data_ate_filtro = None
-
-    granularidade_grafico = granularidade_padrao
+    if data_de_filtro_str:
+        try: data_de_obj = datetime.strptime(data_de_filtro_str, '%Y-%m-%d')
+        except ValueError: flash("Formato de 'Data De' inválido. Use AAAA-MM-DD.", "warning"); data_de_filtro_str = None
+    if data_ate_filtro_str:
+        try: data_ate_obj = datetime.strptime(data_ate_filtro_str, '%Y-%m-%d')
+        except ValueError: flash("Formato de 'Data Até' inválido. Use AAAA-MM-DD.", "warning"); data_ate_filtro_str = None
+    granularidade_grafico = 'mes' 
     if data_de_obj and data_ate_obj:
         diferenca_dias = (data_ate_obj - data_de_obj).days
-        if diferenca_dias <= 10:
-            granularidade_grafico = 'dia'
-        elif diferenca_dias <= 90:
-            granularidade_grafico = 'semana'
-        # else: continua mensal (já é o padrão)
-    elif data_de_filtro or data_ate_filtro: # Se apenas uma data for fornecida, pode ser melhor usar mensal ou avisar o utilizador
-        logger.info(f"Apenas uma data de filtro fornecida, usando granularidade mensal para gráficos.")
-    
-    kpis_data = {
-        'taxa_cobranca_efetuada': "N/D",
-        'percentual_nao_conforme': "N/D",
-        'tempo_medio_resolucao': "N/D", 
-        'valor_total_pendencias': 0.0
-    }
-    chart_data = {
-        'evolucao_meses': [], 'evolucao_cobrancas': [], 'evolucao_pendencias': [],
-        'distribuicao_status_labels': [], 'distribuicao_status_valores': []
-    }
+        if diferenca_dias <= 10: granularidade_grafico = 'dia'
+        elif diferenca_dias <= 90: granularidade_grafico = 'semana'
+    elif data_de_filtro_str or data_ate_filtro_str: logger.info(f"Apenas uma data de filtro fornecida para indicadores, usando granularidade mensal para gráfico de evolução.")
+    kpis_data = {'taxa_cobranca_efetuada': "N/D", 'percentual_nao_conforme': "N/D", 'tempo_medio_resolucao': "N/D", 'valor_total_pendencias': 0.0}
+    chart_data = {'evolucao_meses': [], 'evolucao_cobrancas': [], 'evolucao_pendencias': [], 'distribuicao_status_labels': [], 'distribuicao_status_valores': []}
     try:
-        kpis_data['taxa_cobranca_efetuada'] = get_kpi_taxa_cobranca_efetuada(db_path, data_de_filtro, data_ate_filtro)
-        kpis_data['percentual_nao_conforme'] = get_kpi_percentual_nao_conforme(db_path, data_de_filtro, data_ate_filtro)
-        kpis_data['valor_total_pendencias'] = get_kpi_valor_total_pendencias_ativas(db_path, data_de_filtro, data_ate_filtro)
-        kpis_data['tempo_medio_resolucao'] = get_kpi_tempo_medio_resolucao_pendencias(db_path, data_de_filtro, data_ate_filtro)
-        
-        evolucao_dados = get_evolucao_mensal_cobrancas_pendencias(db_path, data_de_filtro, data_ate_filtro, granularidade=granularidade_grafico)
+        kpis_data['taxa_cobranca_efetuada'] = get_kpi_taxa_cobranca_efetuada(db_path, data_de_filtro_str, data_ate_filtro_str)
+        kpis_data['percentual_nao_conforme'] = get_kpi_percentual_nao_conforme(db_path, data_de_filtro_str, data_ate_filtro_str)
+        kpis_data['valor_total_pendencias'] = get_kpi_valor_total_pendencias_ativas(db_path, data_de_filtro_str, data_ate_filtro_str)
+        kpis_data['tempo_medio_resolucao'] = get_kpi_tempo_medio_resolucao_pendencias(db_path, data_de_filtro_str, data_ate_filtro_str)
+        evolucao_dados = get_evolucao_mensal_cobrancas_pendencias(db_path, data_de_filtro_str, data_ate_filtro_str, granularidade=granularidade_grafico)
         if evolucao_dados: 
             chart_data['evolucao_meses'] = evolucao_dados.get('labels', []) 
             chart_data['evolucao_cobrancas'] = evolucao_dados.get('cobrancas_data', [])
             chart_data['evolucao_pendencias'] = evolucao_dados.get('pendencias_data', [])
-
-        dist_status_dados = get_distribuicao_status_cobranca(db_path, data_de_filtro, data_ate_filtro)
+        dist_status_dados = get_distribuicao_status_cobranca(db_path, data_de_filtro_str, data_ate_filtro_str)
         if dist_status_dados: 
             chart_data['distribuicao_status_labels'] = [item['status'] for item in dist_status_dados]
             chart_data['distribuicao_status_valores'] = [item['total'] for item in dist_status_dados]
     except Exception as e:
         logger.error(f"Erro ao calcular KPIs/dados de gráfico: {e}", exc_info=True)
         flash("Erro ao calcular indicadores ou dados para gráficos.", "warning")
+    return render_template('indicadores_desempenho.html', kpis=kpis_data, chart_data=chart_data,
+                           filtros_data={'data_de': data_de_filtro_str or '', 'data_ate': data_ate_filtro_str or ''})
 
-    return render_template('indicadores_desempenho.html', 
-                           kpis=kpis_data, 
-                           chart_data=chart_data,
-                           filtros_data={'data_de': data_de_filtro or '', 'data_ate': data_ate_filtro or ''}, 
-                           pagina_anterior_url=url_for('mundo_os'),
-                           pagina_anterior_texto="Mundo de OS")
+# --- NOVAS ROTAS ---
+@app.route('/integrar-os', methods=['GET', 'POST'])
+@login_required
+def integrar_os():
+    if request.method == 'POST':
+        if request.form.get('action') == 'add_os_manual':
+            dados_cobranca = {
+                'pedido': request.form.get('pedido'),
+                'os': request.form.get('os'),
+                'placa': request.form.get('placa'),
+                'transportadora': request.form.get('transportadora'),
+                'status': request.form.get('status_cobranca'),
+                'conformidade': request.form.get('conformidade'),
+                'filial': request.form.get('filial'),
+                'data_emissao_pedido': request.form.get('data_emissao_pedido')
+            }
+            if not all([dados_cobranca['pedido'], dados_cobranca['os'], dados_cobranca['placa'], dados_cobranca['filial'], dados_cobranca['transportadora'], dados_cobranca['status'], dados_cobranca['conformidade']]):
+                flash("Todos os campos (exceto Data de Emissão do Pedido) são obrigatórios para adicionar OS manualmente.", "error")
+            else:
+                success, message = add_or_update_cobranca_manual(dados_cobranca, app.config['DATABASE'])
+                flash(message, "success" if success else "error")
+                if success:
+                    log_audit("OS_INTEGRADA_MANUALMENTE", f"OS: {dados_cobranca['os']}, Pedido: {dados_cobranca['pedido']}")
+                    return redirect(url_for('relatorio_cobrancas', filtro_os=dados_cobranca['os']))
+        # Adicionar lógica para "Vincular OS a Pedido Finalizado" aqui depois
+        # elif request.form.get('action') == 'vincular_os_pedido':
+        #     ...
+    return render_template('integrar_os.html')
 
-# ... (Restante das rotas CRUD, Relatórios, Admin, Exportação, CSRF, main - mantidas como na versão anterior) ...
+@app.route('/abastecimento-estoque')
+@login_required
+def abastecimento_estoque():
+    # Lógica futura para esta página
+    return render_template('abastecimento_estoque.html')
+
+
+# --- CRUD para Cobranças ---
 @app.route('/cobranca/<int:cobranca_id>/edit', methods=['GET', 'POST'])
 @login_required 
 def edit_cobranca(cobranca_id):
@@ -370,8 +377,8 @@ def edit_cobranca(cobranca_id):
             if update_cobranca_db(cobranca_id, form_data_repopulate, app.config['DATABASE']):
                 log_audit("EDIT_COBRANCA_SUCCESS", f"Cobrança ID {cobranca_id} atualizada."); flash("Cobrança atualizada!", "success"); return redirect(url_for('relatorio_cobrancas'))
             else: log_audit("EDIT_COBRANCA_FAILURE", f"Falha ao atualizar ID {cobranca_id}."); flash("Erro ao atualizar. Pedido/OS duplicado?", "error")
-        return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade, pagina_anterior_url=url_for('relatorio_cobrancas'), pagina_anterior_texto="Relatório de Cobranças")
-    return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade, pagina_anterior_url=url_for('relatorio_cobrancas'), pagina_anterior_texto="Relatório de Cobranças")
+        return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade)
+    return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade)
 @app.route('/cobranca/<int:cobranca_id>/delete', methods=['POST'])
 @login_required 
 def delete_cobranca_route(cobranca_id):
@@ -382,6 +389,7 @@ def delete_cobranca_route(cobranca_id):
         else: log_audit("DELETE_COBRANCA_FAILURE", f"Falha ao apagar ID {cobranca_id}."); flash("Erro ao apagar.", "error")
     return redirect(url_for('relatorio_cobrancas'))
 
+# --- CRUD para Pendências ---
 @app.route('/pendencia/<int:pendencia_id>/edit', methods=['GET', 'POST'])
 @login_required 
 def edit_pendencia(pendencia_id):
@@ -410,8 +418,8 @@ def edit_pendencia(pendencia_id):
                 else: log_audit("EDIT_PENDENCIA_FAILURE", f"Falha ao atualizar ID {pendencia_id}."); flash("Erro ao atualizar pendência.", "error")
             except ValueError: flash("Valor da pendência inválido.", "error")
         form_data_repopulate['data_emissao_fmt_input'] = form_data_repopulate.get('data_emissao', '')
-        return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id, pagina_anterior_url=url_for('relatorio_pendentes'), pagina_anterior_texto="Relatório de Pendências")
-    return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id, pagina_anterior_url=url_for('relatorio_pendentes'), pagina_anterior_texto="Relatório de Pendências")
+        return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id)
+    return render_template('edit_pendencia.html', pendencia=form_data_repopulate, pendencia_id_for_url=pendencia_id)
 @app.route('/pendencia/<int:pendencia_id>/delete', methods=['POST'])
 @login_required 
 def delete_pendencia_route(pendencia_id):
@@ -422,6 +430,7 @@ def delete_pendencia_route(pendencia_id):
         else: log_audit("DELETE_PENDENCIA_FAILURE", f"Falha ao apagar ID {pendencia_id}."); flash("Erro ao apagar pendência.", "error")
     return redirect(url_for('relatorio_pendentes'))
 
+# --- Relatórios ---
 @app.route('/relatorio-cobrancas')
 @login_required
 def relatorio_cobrancas():
@@ -430,8 +439,8 @@ def relatorio_cobrancas():
     try:
         cobrancas = get_cobrancas(filtros=filtros_query, db_name=app.config['DATABASE'])
         distinct_status = ["Com cobrança", "Sem cobrança"]; distinct_filiais = get_distinct_values('filial', 'cobrancas', app.config['DATABASE']); distinct_conformidade = ["Conforme", "Verificar"]
-        return render_template('relatorio_cobrancas.html', cobrancas=cobrancas, filtros=filtros_form, distinct_status=distinct_status, distinct_filiais=distinct_filiais, distinct_conformidade=distinct_conformidade, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis") 
-    except Exception as e: logger.error(f"Erro relatório cobranças: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_cobrancas.html', cobrancas=[], filtros=filtros_form, distinct_status=[], distinct_filiais=[], distinct_conformidade=[], pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
+        return render_template('relatorio_cobrancas.html', cobrancas=cobrancas, filtros=filtros_form, distinct_status=distinct_status, distinct_filiais=distinct_filiais, distinct_conformidade=distinct_conformidade) 
+    except Exception as e: logger.error(f"Erro relatório cobranças: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_cobrancas.html', cobrancas=[], filtros=filtros_form, distinct_status=[], distinct_filiais=[], distinct_conformidade=[])
 @app.route('/relatorio-pendentes')
 @login_required
 def relatorio_pendentes():
@@ -442,9 +451,10 @@ def relatorio_pendentes():
         distinct_status_pend = get_distinct_values('status', 'pendentes', app.config['DATABASE'])
         distinct_fornecedores_pend = get_distinct_values('fornecedor', 'pendentes', app.config['DATABASE'])
         distinct_filiais_pend = get_distinct_values('filial', 'pendentes', app.config['DATABASE'])
-        return render_template('relatorio_pendentes.html', pendentes=pendentes, filtros=filtros_form, distinct_status_pend=distinct_status_pend, distinct_fornecedores_pend=distinct_fornecedores_pend, distinct_filiais_pend=distinct_filiais_pend, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
-    except Exception as e: logger.error(f"Erro relatório pendências: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_pendentes.html', pendentes=[], filtros=filtros_form, distinct_status_pend=[], distinct_fornecedores_pend=[], distinct_filiais_pend=[], pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
+        return render_template('relatorio_pendentes.html', pendentes=pendentes, filtros=filtros_form, distinct_status_pend=distinct_status_pend, distinct_fornecedores_pend=distinct_fornecedores_pend, distinct_filiais_pend=distinct_filiais_pend)
+    except Exception as e: logger.error(f"Erro relatório pendências: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_pendentes.html', pendentes=[], filtros=filtros_form, distinct_status_pend=[], distinct_fornecedores_pend=[], distinct_filiais_pend=[])
 
+# --- Rota de Visualização do Log de Auditoria (Admin) ---
 @app.route('/admin/audit_log')
 @admin_required
 def view_audit_log():
@@ -475,8 +485,9 @@ def view_audit_log():
             except Exception: log['timestamp_fmt'] = log['timestamp'] + " (Erro Formato)"
             logs_processed.append(log)
     except Exception as e: logger.error(f"Erro ao buscar logs: {e}"); flash("Erro ao buscar logs.", "error")
-    return render_template('admin/view_audit_log.html', logs=logs_processed, current_page=page, total_pages=total_pages, filters=filters_form, total_logs=total_logs, pagina_anterior_url=url_for('home'), pagina_anterior_texto="Home Pólis")
+    return render_template('admin/view_audit_log.html', logs=logs_processed, current_page=page, total_pages=total_pages, filters=filters_form, total_logs=total_logs)
 
+# --- ROTA PARA VISUALIZAÇÃO DE IMPRESSÃO DE PENDÊNCIAS ---
 @app.route('/relatorio-pendentes/imprimir_visualizacao')
 @login_required
 def imprimir_visualizacao_pendentes():
@@ -497,6 +508,28 @@ def imprimir_visualizacao_pendentes():
         flash("Erro ao gerar visualização para impressão. Verifique os logs.","error")
         return redirect(url_for('relatorio_pendentes',**filtros_form))
 
+# --- ROTA PARA VISUALIZAÇÃO DE IMPRESSÃO DE COBRANÇAS ---
+@app.route('/relatorio-cobrancas/imprimir_visualizacao')
+@login_required
+def imprimir_visualizacao_cobrancas():
+    filtros_form = {k: request.args.get(f'filtro_{k}', '').strip() for k in ['pedido', 'os', 'status', 'filial', 'placa', 'conformidade', 'data_emissao_de', 'data_emissao_ate']}
+    filtros_query = {k: v for k, v in filtros_form.items() if v}
+    try:
+        cobrancas_data = get_cobrancas(filtros=filtros_query, db_name=app.config['DATABASE'])
+        now_sp = datetime.now(pytz.timezone('America/Sao_Paulo')); data_geracao = now_sp.strftime('%d/%m/%Y %H:%M:%S')
+        log_audit("VIEW_PRINT_COBRANCAS", f"Filtros: {filtros_form}")
+        pagina_anterior_com_filtros = url_for('relatorio_cobrancas', **request.args)
+        return render_template('reports/cobrancas_print_view.html', cobrancas=cobrancas_data, filtros=filtros_form, 
+                               usuario_gerador=current_user.username, data_geracao=data_geracao,
+                               pagina_anterior_url=pagina_anterior_com_filtros,
+                               pagina_anterior_texto="Relatório de Cobranças")
+    except Exception as e: 
+        logger.error(f"Erro ao gerar visualização para impressão de cobranças: {e}", exc_info=True)
+        log_audit("VIEW_PRINT_COBRANCAS_ERROR", f"Erro: {e}, Filtros: {filtros_form}")
+        flash("Erro ao gerar visualização para impressão de cobranças. Verifique os logs.", "error")
+        return redirect(url_for('relatorio_cobrancas', **filtros_form))
+
+# --- ROTA PARA EXPORTAR COBRANÇAS PARA EXCEL (mantida) ---
 @app.route('/relatorio-cobrancas/exportar_excel')
 @login_required
 def exportar_excel_cobrancas():

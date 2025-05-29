@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Abastecimento e Estoque - Pólis{% endblock %}
+
+{% block content %}
+{# O botão Voltar foi removido do base.html e das rotas #}
+
+<div class="page-header">
+    <h2 class="page-title"><i class="fas fa-gas-pump"></i> Abastecimento e Estoque</h2>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Gestão de Custos de Abastecimento e Estoque</h3>
+    </div>
+    <div class="card-body">
+        <p class="text-info"><i class="fas fa-info-circle"></i> Esta página está em desenvolvimento.</p>
+        <p>
+            Futuramente, aqui poderá vincular custos de abastecimento ou movimentações de estoque
+            a pedidos finalizados, gerando automaticamente os lançamentos correspondentes na
+            secção de cobranças com os dados pré-definidos.
+        </p>
+        <p class="text-muted">
+            Isto incluirá:
+            <ul>
+                <li>Seleção de um pedido "Finalizado" (provavelmente da origem de pendências).</li>
+                <li>Escolha da categoria: "Estoque" ou "Abastecimento".</li>
+                <li>Criação automática de um registo em "Cobranças" com:
+                    <ul>
+                        <li>Status: "Com cobrança"</li>
+                        <li>OS: "Estoque" ou "Abastecimento"</li>
+                        <li>Transportadora: "TRANSAC TRANSPORTE ROD. LTDA"</li>
+                        <li>Outros campos relevantes preenchidos ou solicitados.</li>
+                    </ul>
+                </li>
+            </ul>
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block head_extra %}
+{{ super() }}
+<style>
+    /* Estilos específicos para esta página, se necessário */
+</style>
+{% endblock %}
