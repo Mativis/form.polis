@@ -6,7 +6,7 @@ Este projeto se resume em um dashboard com visualização local com código vers
 
 Este projeto não realiza a extração de pedidos fora do seu ambiente controlado. 
 
-Este projeto tem a finalidade de fins proffisionais para a apresentação de dados inteligentes e monitoramento ágil. 
+Este projeto tem a finalidade de fins profisionais para a apresentação de dados inteligentes e monitoramento ágil. 
 
 ----
 ### Developer 
