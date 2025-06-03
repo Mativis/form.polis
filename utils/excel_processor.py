@@ -8,13 +8,13 @@ import logging
 
 # Configuração do logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG, 
     format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
     handlers=[logging.StreamHandler()] 
 )
 logger = logging.getLogger(__name__)
 
-# --- Funções de Normalização e Auxiliares (mantidas) ---
+# --- Funções de Normalização e Auxiliares ---
 def normalize_column_name_generic(col_name, prefix="col_desconhecida"):
     if pd.isna(col_name) or col_name is None:
         return f"{prefix}_{str(abs(hash(str(datetime.now()))))}"
@@ -35,19 +35,6 @@ def get_col_name_from_df(df_column_names_list, conceptual_names_list):
             return normalized_conceptual_name_to_find
     return None
 
-def is_valid_date_string(date_string):
-    if not date_string or not isinstance(date_string, str): return False
-    cleaned_string = date_string.strip()
-    if len(cleaned_string) < 6: return False
-    if not any(char.isdigit() for char in cleaned_string): return False
-    try: pd.to_datetime(cleaned_string, errors='raise'); return True
-    except (ValueError, TypeError, pd.errors.ParserError):
-        common_formats = ['%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%m/%d/%Y', '%d/%m/%y', '%y-%m-%d', '%d-%m-%y', '%m/%d/%y']
-        for fmt in common_formats:
-            try: datetime.strptime(cleaned_string, fmt); return True
-            except ValueError: continue
-        return False
-
 def format_date_for_db(date_string_or_dt):
     if not date_string_or_dt: return None
     dt_obj = None
@@ -64,11 +51,11 @@ def format_date_for_db(date_string_or_dt):
             except ValueError: continue
         if not dt_obj:
             try: dt_obj = pd.to_datetime(date_string, errors='raise').to_pydatetime()
-            except (ValueError, TypeError, pd.errors.ParserError): logger.warning(f"Não foi possível converter '{date_string}'."); return None
+            except (ValueError, TypeError, pd.errors.ParserError): logger.debug(f"Não foi possível converter data string '{date_string}'."); return None
     else: 
         try:
             dt_obj = (pd.to_datetime('1899-12-30') + pd.to_timedelta(float(date_string_or_dt), unit='D')).to_pydatetime()
-        except (ValueError, TypeError): logger.warning(f"Não foi possível converter data numérica '{date_string_or_dt}'."); return None
+        except (ValueError, TypeError): logger.debug(f"Não foi possível converter data numérica Excel '{date_string_or_dt}'."); return None
     if dt_obj:
         sao_paulo_tz = pytz.timezone('America/Sao_Paulo')
         if dt_obj.tzinfo is None or dt_obj.tzinfo.utcoffset(dt_obj) is None: dt_obj = sao_paulo_tz.localize(dt_obj)
@@ -84,10 +71,9 @@ def format_date_for_query(date_string_or_dt):
             dt_obj = datetime.strptime(date_string_or_dt, '%Y-%m-%d') 
             return dt_obj.strftime('%Y-%m-%d')
         except ValueError:
-            logger.warning(f"Não foi possível converter a string de data do filtro '{date_string_or_dt}' para o formato YYYY-MM-DD.")
+            logger.debug(f"Não foi possível converter a string de data do filtro '{date_string_or_dt}' para o formato YYYY-MM-DD.")
             return None
     return None
-
 
 def categorizar_status_cobranca(status_original):
     if not status_original or pd.isna(status_original): return "Sem cobrança" 
@@ -98,7 +84,7 @@ def categorizar_status_cobranca(status_original):
         if keyword in status_lower: return "Com cobrança"
     for keyword in sem_cobranca_keywords:
         if keyword in status_lower: return "Sem cobrança"
-    if status_lower: logger.warning(f"Status '{status_original}' não categorizado, assumindo 'Sem cobrança'."); return "Sem cobrança"
+    if status_lower: logger.debug(f"Status de cobrança '{status_original}' não categorizado, assumindo 'Sem cobrança'."); return "Sem cobrança"
     return "Sem cobrança"
 
 def categorizar_conformidade(conformidade_original):
@@ -110,12 +96,12 @@ def categorizar_conformidade(conformidade_original):
         if keyword == conformidade_lower or keyword in conformidade_lower.split(): return "Conforme"
     for keyword in verificar_keywords:
         if keyword == conformidade_lower or keyword in conformidade_lower.split(): return "Verificar"
-    if conformidade_lower: logger.warning(f"Conformidade '{conformidade_original}' não categorizada, assumindo 'Verificar'."); return "Verificar"
+    if conformidade_lower: logger.debug(f"Conformidade '{conformidade_original}' não categorizada, assumindo 'Verificar'."); return "Verificar"
     return "Verificar"
 
 # --- Funções de Processamento de Excel/CSV ---
 def processar_excel_cobrancas(file_path, file_extension, db_name):
-    logger.info(f"Processando cobranças: {file_path} para DB: {db_name}")
+    logger.info(f"Processando cobranças (esquema antigo): {file_path} para DB: {db_name}")
     conn = None
     try:
         df_cobrancas = None
@@ -126,15 +112,24 @@ def processar_excel_cobrancas(file_path, file_extension, db_name):
             except Exception: logger.warning("Falha CSV com vírgula, tentando ';'."); df_cobrancas = pd.read_csv(file_path, delimiter=';', dtype=str, keep_default_na=False, na_filter=False, encoding='utf-8-sig')
         else: return False, "Formato de ficheiro não suportado. Use .xlsx ou .csv."
         if df_cobrancas is None or df_cobrancas.empty: return False, "Ficheiro de cobranças vazio ou não lido."
+        
         original_columns = list(df_cobrancas.columns)
         df_cobrancas.columns = [normalize_column_name_generic(col, "cob") for col in df_cobrancas.columns]
-        conceptual_map = {'pedido': ['pedido'], 'os': ['os'], 'filial': ['filial'], 'placa': ['placa'], 'transportadora': ['transportadora'], 'conformidade': ['conformidade'], 'status': ['status']}
+        
+        conceptual_map = {
+            'pedido': ['pedido'], 'os': ['os'], 'filial': ['filial'], 
+            'placa': ['placa'], 'transportadora': ['transportadora'], 
+            'conformidade': ['conformidade'], 'status': ['status']
+        }
         mapped_df = pd.DataFrame(); missing_cols = []
         for conceptual, options in conceptual_map.items():
             found = get_col_name_from_df(df_cobrancas.columns, options)
-            if found: mapped_df[conceptual] = df_cobrancas[found]
-            else: missing_cols.append(f"'{options[0]}'")
-        if missing_cols: msg = f"Colunas faltando em Cobranças: {', '.join(missing_cols)}. Disponíveis: {original_columns}."; logger.error(msg); return False, msg
+            if found: 
+                mapped_df[conceptual] = df_cobrancas[found]
+            elif conceptual in ['pedido', 'os']: 
+                missing_cols.append(f"'{options[0]}'")
+        
+        if missing_cols: msg = f"Colunas obrigatórias faltando em Cobranças: {', '.join(missing_cols)}. Disponíveis: {original_columns}."; logger.error(msg); return False, msg
         
         df_final = mapped_df.copy()
         df_final['status_categorizado'] = df_final['status'].apply(categorizar_status_cobranca)
@@ -145,37 +140,52 @@ def processar_excel_cobrancas(file_path, file_extension, db_name):
         cursor = conn.cursor()
         novos, atualizados, ignorados = 0,0,0
         
-        cursor.execute("SELECT pedido_ref, data_emissao FROM pendentes WHERE data_emissao IS NOT NULL")
-        datas_emissao_pendentes = {row['pedido_ref']: row['data_emissao'] for row in cursor.fetchall()}
+        cursor.execute("SELECT UPPER(TRIM(pedido_ref)) as pedido_ref_norm, data_emissao FROM pendentes WHERE data_emissao IS NOT NULL")
+        datas_emissao_pendentes = {row['pedido_ref_norm']: row['data_emissao'] for row in cursor.fetchall() if row['pedido_ref_norm']}
         
-        for _, row_data_frame in df_final.iterrows(): 
-            pedido = str(row_data_frame.get('pedido', '')).strip(); os_val = str(row_data_frame.get('os', '')).strip()
-            if not pedido or not os_val: ignorados += 1; continue
+        for index, row_data_frame in df_final.iterrows(): 
+            pedido = str(row_data_frame.get('pedido', '')).strip().upper() 
+            os_val = str(row_data_frame.get('os', '')).strip() 
             
-            cursor.execute("SELECT id, data_emissao_pedido FROM cobrancas WHERE pedido = ? AND os = ?", (pedido, os_val))
+            if not pedido or not os_val: 
+                logger.warning(f"Linha {index+2} ignorada: Pedido ou OS ausente. Pedido: '{pedido}', OS: '{os_val}'")
+                ignorados += 1; continue
+            
+            cursor.execute("SELECT id, data_emissao_pedido FROM cobrancas WHERE UPPER(TRIM(pedido)) = ? AND os = ?", (pedido, os_val))
             existing_record = cursor.fetchone() 
             
             dt_utc = datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
             status_final = row_data_frame.get('status_categorizado'); conformidade_final = row_data_frame.get('conformidade_categorizada')
+            
             data_emissao_pedido_val = datas_emissao_pendentes.get(pedido) 
-            
-            if existing_record and existing_record['data_emissao_pedido'] and data_emissao_pedido_val: 
+            if existing_record and existing_record['data_emissao_pedido']:
                 data_emissao_pedido_val = existing_record['data_emissao_pedido']
+
+            dados_comuns = (
+                str(row_data_frame.get('filial','')).strip(), 
+                str(row_data_frame.get('placa','')).strip().upper() if pd.notna(row_data_frame.get('placa')) else None, 
+                str(row_data_frame.get('transportadora','')).strip(),
+                conformidade_final, 
+                status_final, 
+                data_emissao_pedido_val, 
+                dt_utc 
+            )
             
-            dados_insert = (pedido, os_val, str(row_data_frame.get('filial','')).strip(), str(row_data_frame.get('placa','')).strip(), 
-                            str(row_data_frame.get('transportadora','')).strip(), conformidade_final, status_final, 
-                            data_emissao_pedido_val, dt_utc)
-            dados_update = (str(row_data_frame.get('filial','')).strip(), str(row_data_frame.get('placa','')).strip(), 
-                            str(row_data_frame.get('transportadora','')).strip(), conformidade_final, status_final, 
-                            data_emissao_pedido_val, dt_utc, pedido, os_val)
             try:
                 if existing_record: 
-                    cursor.execute("UPDATE cobrancas SET filial=?, placa=?, transportadora=?, conformidade=?, status=?, data_emissao_pedido=?, data_importacao=? WHERE pedido=? AND os=?", dados_update)
+                    dados_update = dados_comuns + (existing_record['id'],)
+                    cursor.execute("""UPDATE cobrancas SET filial=?, placa=?, transportadora=?, conformidade=?, status=?, 
+                                      data_emissao_pedido=?, data_importacao=? 
+                                      WHERE id=?""", dados_update)
                     atualizados += 1
                 else: 
-                    cursor.execute("INSERT INTO cobrancas (pedido, os, filial, placa, transportadora, conformidade, status, data_emissao_pedido, data_importacao) VALUES (?,?,?,?,?,?,?,?,?)", dados_insert)
+                    dados_insert = (pedido, os_val) + dados_comuns
+                    cursor.execute("""INSERT INTO cobrancas (pedido, os, filial, placa, transportadora, 
+                                       conformidade, status, data_emissao_pedido, data_importacao) 
+                                       VALUES (?,?,?,?,?,?,?,?,?)""", dados_insert)
                     novos += 1
-            except sqlite3.Error as e_sql: logger.error(f"SQL Erro Cobrança (P:{pedido},OS:{os_val}): {e_sql}"); ignorados +=1
+            except sqlite3.Error as e_sql: 
+                logger.error(f"SQL Erro Cobrança (P:{pedido},OS:{os_val}): {e_sql}"); ignorados +=1
         conn.commit()
         return True, f"Cobranças: {novos} novos, {atualizados} atualizados, {ignorados} ignorados."
     except FileNotFoundError: return False, f"Ficheiro não encontrado: {file_path}"
@@ -187,7 +197,7 @@ def processar_excel_cobrancas(file_path, file_extension, db_name):
     return False, "Erro desconhecido no processamento de cobranças."
 
 def processar_excel_pendentes(file_path, file_extension, db_name):
-    logger.info(f"Processando pendências: {file_path} para DB: {db_name}")
+    logger.info(f"Processando pendências (com UPSERT e normalização de pedido_ref): {file_path} para DB: {db_name}")
     conn = None
     try:
         df_pendentes = None
@@ -200,9 +210,11 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
             try: df_pendentes = pd.read_csv(file_path, delimiter=',', dtype=str, keep_default_na=False, na_filter=False, encoding='utf-8-sig')
             except Exception: logger.warning("Falha CSV ',', tentando ';'."); df_pendentes = pd.read_csv(file_path, delimiter=';', dtype=str, keep_default_na=False, na_filter=False, encoding='utf-8-sig')
         else: return False, "Formato não suportado para pendências. Use .xlsx ou .csv."
+        
         if df_pendentes is None or df_pendentes.empty: return False, "Ficheiro de pendências vazio ou não lido."
         original_columns = list(df_pendentes.columns)
         df_pendentes.columns = [normalize_column_name_generic(col, "pend") for col in df_pendentes.columns]
+        
         conceptual_map = {'pedido_ref': ['id', 'pedido', 'pedido_id', 'codigo_pedido', 'pedido_ref'], 'valor': ['valor', 'montante', 'total', 'custo_pendencia', 'valor_total', 'valor pedido'],
                           'fornecedor': ['fornecedor', 'forncedor', 'vendor'], 'filial': ['filial', 'loja', 'unidade'], 'status': ['status', 'situacao', 'estado_pendencia'], 
                           'data_finalizacao': ['data de finalizacao', 'data_finalizacao', 'data_conclusao', 'finalizacao_data', 'dt_finalizacao', 'data finalizacao'],
@@ -216,7 +228,6 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
 
         if not col_pedido_ref: missing_mandatory.append("'Pedido Ref.' (ID)")
         if not col_valor: missing_mandatory.append("'Valor'")
-        # Não são mais estritamente obrigatórias, mas avisaremos se não encontradas
         if not col_data_emissao: logger.warning("Coluna para 'Data de Emissão' (ex: data_emissao) não encontrada na planilha de Pendentes. Será guardada como Nula se não existir no BD.")
         if not col_data_finalizacao_real: logger.warning("Coluna para 'Data de Finalização' (ex: data_finalizacao) não encontrada na planilha de Pendentes. Será guardada como Nula se não existir no BD.")
 
@@ -236,25 +247,25 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
         conn.row_factory = sqlite3.Row 
         cursor = conn.cursor()
         
-        # MUDANÇA: Não apaga mais a tabela inteira. Usa INSERT OR REPLACE.
-        # logger.warning("Limpando tabela 'pendentes'."); cursor.execute("DELETE FROM pendentes") 
-        
-        registos_processados, ignorados, atualizacoes_cobrancas = 0,0,0
+        registos_processados = 0; ignorados = 0; atualizacoes_cobrancas = 0
         
         for index, row_data_frame in mapped_df.iterrows(): 
-            pedido_ref = str(row_data_frame.get('pedido_ref','')).strip(); valor_s = str(row_data_frame.get('valor','')).strip()
+            pedido_ref_original = str(row_data_frame.get('pedido_ref','')).strip()
+            pedido_ref_normalizado = pedido_ref_original.upper() if pedido_ref_original else None
+
+            valor_s = str(row_data_frame.get('valor','')).strip()
             data_emissao_str = str(row_data_frame.get('data_emissao_original', '')).strip()
             data_finalizacao_real_str = str(row_data_frame.get('data_finalizacao_original', '')).strip()
 
-            if not pedido_ref or not valor_s: 
+            if not pedido_ref_normalizado or not valor_s: 
                 ignorados+=1; 
-                logger.warning(f"Ignorando linha {index+2} por falta de Pedido Ref ou Valor: {row_data_frame.to_dict()}")
+                logger.warning(f"Ignorando linha {index+2} por falta de Pedido Ref ('{pedido_ref_original}') ou Valor ('{valor_s}')")
                 continue
             try: 
                 val_f = float(valor_s.replace('R$','').strip().replace('.','').replace(',','.'))
             except ValueError: 
                 ignorados+=1; 
-                logger.warning(f"Ignorando linha {index+2} por valor inválido: {valor_s}")
+                logger.warning(f"Ignorando linha {index+2} por valor inválido: {valor_s} para Pedido Ref: {pedido_ref_original}")
                 continue
             
             data_emissao_db = format_date_for_db(data_emissao_str) if data_emissao_str else None
@@ -266,17 +277,16 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
                 status_final = "Pendente"
 
             dados_pendente = (
-                pedido_ref, 
+                pedido_ref_normalizado, 
                 str(row_data_frame.get('fornecedor','N/A')).strip() or 'N/A', 
                 str(row_data_frame.get('filial','N/A')).strip() or 'N/A', 
                 val_f, 
                 status_final, 
                 data_emissao_db, 
                 data_finalizacao_real_db, 
-                datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S') # data_importacao
+                datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S') 
             )
             try: 
-                # Usar INSERT OR REPLACE para inserir ou atualizar com base na UNIQUE constraint de pedido_ref
                 cursor.execute("""
                     INSERT OR REPLACE INTO pendentes 
                     (pedido_ref, fornecedor, filial, valor, status, data_emissao, data_finalizacao_real, data_importacao) 
@@ -284,17 +294,17 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
                 """, dados_pendente)
                 registos_processados += 1
                 
-                if data_emissao_db and pedido_ref: # Atualiza data_emissao_pedido em cobrancas
+                if data_emissao_db and pedido_ref_normalizado:
                     try:
-                        # Só atualiza se a data em cobrancas for nula ou vazia, para não sobrescrever uma data já definida manualmente
-                        res_update = cursor.execute("UPDATE cobrancas SET data_emissao_pedido = ? WHERE pedido = ? AND (data_emissao_pedido IS NULL OR data_emissao_pedido = '')", (data_emissao_db, pedido_ref))
+                        res_update = cursor.execute("UPDATE cobrancas SET data_emissao_pedido = ? WHERE UPPER(TRIM(pedido)) = ? AND (data_emissao_pedido IS NULL OR data_emissao_pedido = '')", 
+                                                    (data_emissao_db, pedido_ref_normalizado)) 
                         if res_update.rowcount > 0: 
                             atualizacoes_cobrancas += res_update.rowcount
-                            logger.info(f"Data de emissão do pedido {pedido_ref} atualizada em Cobranças para {data_emissao_db}.")
+                            logger.info(f"Data de emissão do pedido {pedido_ref_normalizado} atualizada em Cobranças para {data_emissao_db}.")
                     except sqlite3.Error as e_up_cob: 
-                        logger.error(f"Erro ao atualizar data_emissao_pedido para P:{pedido_ref}: {e_up_cob}")
+                        logger.error(f"Erro ao atualizar data_emissao_pedido para P:{pedido_ref_normalizado}: {e_up_cob}")
             except sqlite3.Error as e: 
-                logger.error(f"SQL Erro ao processar Pendência (Ref:{pedido_ref}): {e}")
+                logger.error(f"SQL Erro ao processar Pendência (Ref:{pedido_ref_original}): {e}")
                 ignorados+=1
         
         conn.commit()
@@ -307,71 +317,103 @@ def processar_excel_pendentes(file_path, file_extension, db_name):
         if conn: conn.close()
     return False, "Erro desconhecido no processamento de pendências."
 
+
 # --- Funções de Leitura de Dados ---
 def get_cobrancas(filtros=None, db_name='polis_database.db'):
     conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-    query = "SELECT id, pedido, os, filial, placa, transportadora, conformidade, status, data_emissao_pedido, strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt, strftime('%d/%m/%Y', data_emissao_pedido) as data_emissao_pedido_fmt FROM cobrancas"
+    query = """
+        SELECT id, pedido, os, filial, placa, transportadora, 
+               conformidade, status, data_emissao_pedido, 
+               strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt, 
+               strftime('%d/%m/%Y', data_emissao_pedido) as data_emissao_pedido_fmt 
+        FROM cobrancas
+    """
     conditions, params = [], []
     if filtros:
         for key, val in filtros.items():
             if val: 
-                if key in ['pedido', 'os', 'placa', 'filial', 'transportadora']: conditions.append(f"LOWER({key}) LIKE LOWER(?)"); params.append(f"%{val}%")
-                elif key in ['status', 'conformidade']: conditions.append(f"LOWER({key}) = LOWER(?)"); params.append(val)
+                if key in ['pedido', 'os', 'placa', 'filial', 'transportadora']: 
+                    conditions.append(f"LOWER(TRIM({key})) LIKE LOWER(?)"); params.append(f"%{val}%")
+                elif key in ['status', 'conformidade']: 
+                    conditions.append(f"LOWER(TRIM({key})) = LOWER(?)"); params.append(val.lower())
                 elif key == 'data_emissao_de': 
                     dt_db = format_date_for_query(val)
                     if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao_pedido) >= ? AND data_emissao_pedido IS NOT NULL"); params.append(dt_db)
                 elif key == 'data_emissao_ate': 
                     dt_db = format_date_for_query(val)
                     if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao_pedido) <= ? AND data_emissao_pedido IS NOT NULL"); params.append(dt_db)
+    
     if conditions: query += " WHERE " + " AND ".join(conditions)
     query += " ORDER BY CASE WHEN data_emissao_pedido IS NULL THEN 1 ELSE 0 END, data_emissao_pedido DESC, id DESC" 
+    
+    logger.debug(f"Query get_cobrancas: {query} com params: {params}")
     try: cursor.execute(query, tuple(params)); return cursor.fetchall()
     except sqlite3.Error as e: logger.error(f"Erro SQL buscar cobranças: {e}"); return []
     finally:
         if conn: conn.close()
 
-def get_pendentes(filtros=None, db_name='polis_database.db', filial_cobranca=None): # Adicionado filial_cobranca para KPIs
+def get_pendentes(filtros=None, db_name='polis_database.db', filial_cobranca=None): 
     conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-    query = "SELECT id, pedido_ref, fornecedor, filial, valor, status, data_emissao, data_finalizacao_real, strftime('%d/%m/%Y %H:%M:%S', data_importacao, 'localtime') as data_importacao_fmt, strftime('%d/%m/%Y', data_emissao) as data_emissao_fmt, strftime('%d/%m/%Y', data_finalizacao_real) as data_finalizacao_real_fmt FROM pendentes"
-    conditions, params = [], []
     
-    if filial_cobranca: # Usado por KPIs que filtram por filial da cobrança, mas precisam de dados da pendente
-        conditions.append("LOWER(TRIM(filial)) = LOWER(?)")
+    base_query = """
+        SELECT p.id, p.pedido_ref, p.fornecedor, p.filial, p.valor, p.status, 
+               p.data_emissao, p.data_finalizacao_real, 
+               strftime('%d/%m/%Y %H:%M:%S', p.data_importacao, 'localtime') as data_importacao_fmt, 
+               strftime('%d/%m/%Y', p.data_emissao) as data_emissao_fmt, 
+               strftime('%d/%m/%Y', p.data_finalizacao_real) as data_finalizacao_real_fmt
+        FROM (
+            SELECT *,
+                   ROW_NUMBER() OVER (PARTITION BY UPPER(TRIM(pedido_ref)) ORDER BY data_importacao DESC, id DESC) as rn
+            FROM pendentes
+        ) p
+        WHERE p.rn = 1 
+    """
+    conditions, params = [], [] 
+
+    if filial_cobranca: 
+        conditions.append("LOWER(TRIM(p.filial)) = LOWER(?)")
         params.append(filial_cobranca.lower())
 
     if filtros:
-        # Filtros de data para data_emissao em pendentes (usado por KPIs de pendentes)
-        if filtros.get('data_emissao_de_pend'): 
+        if filtros.get('data_emissao_de_pend'):
             dt_db = format_date_for_query(filtros['data_emissao_de_pend'])
-            if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao) >= ? AND data_emissao IS NOT NULL"); params.append(dt_db)
+            if dt_db: conditions.append("STRFTIME('%Y-%m-%d', p.data_emissao) >= ? AND p.data_emissao IS NOT NULL"); params.append(dt_db)
         if filtros.get('data_emissao_ate_pend'):
             dt_db = format_date_for_query(filtros['data_emissao_ate_pend'])
-            if dt_db: conditions.append("STRFTIME('%Y-%m-%d', data_emissao) <= ? AND data_emissao IS NOT NULL"); params.append(dt_db)
+            if dt_db: conditions.append("STRFTIME('%Y-%m-%d', p.data_emissao) <= ? AND p.data_emissao IS NOT NULL"); params.append(dt_db)
         
-        # Filtros específicos do relatório de pendentes
-        if filtros.get('pedido_ref'): conditions.append("LOWER(pedido_ref) LIKE LOWER(?)"); params.append(f"%{filtros['pedido_ref']}%")
-        if filtros.get('fornecedor'): conditions.append("LOWER(fornecedor) LIKE LOWER(?)"); params.append(f"%{filtros['fornecedor']}%")
+        if filtros.get('pedido_ref'): conditions.append("LOWER(p.pedido_ref) LIKE LOWER(?)"); params.append(f"%{filtros['pedido_ref']}%")
+        if filtros.get('fornecedor'): conditions.append("LOWER(p.fornecedor) LIKE LOWER(?)"); params.append(f"%{filtros['fornecedor']}%")
         if filtros.get('filial') and not filial_cobranca: 
-            conditions.append("LOWER(filial) LIKE LOWER(?)"); params.append(f"%{filtros['filial']}%")
-        if filtros.get('status'): conditions.append("LOWER(status) LIKE LOWER(?)"); params.append(f"%{filtros['status']}%")
+            conditions.append("LOWER(p.filial) LIKE LOWER(?)"); params.append(f"%{filtros['filial']}%")
+        if filtros.get('status'): conditions.append("LOWER(p.status) LIKE LOWER(?)"); params.append(f"%{filtros['status']}%")
         if filtros.get('valor_min'):
-            try: conditions.append("valor >= ?"); params.append(float(str(filtros['valor_min']).replace(',', '.')))
+            try: conditions.append("p.valor >= ?"); params.append(float(str(filtros['valor_min']).replace(',', '.')))
             except ValueError: logger.warning(f"Valor mínimo inválido '{filtros['valor_min']}'")
         if filtros.get('valor_max'):
-            try: conditions.append("valor <= ?"); params.append(float(str(filtros['valor_max']).replace(',', '.')))
+            try: conditions.append("p.valor <= ?"); params.append(float(str(filtros['valor_max']).replace(',', '.')))
             except ValueError: logger.warning(f"Valor máximo inválido '{filtros['valor_max']}'")
             
-    if conditions: query += " WHERE " + " AND ".join(conditions)
-    query += " ORDER BY data_emissao DESC, id DESC" 
-    try: cursor.execute(query, tuple(params)); return cursor.fetchall()
-    except sqlite3.Error as e: logger.error(f"Erro SQL buscar pendências: {e}"); return []
+    if conditions:
+        query = f"{base_query} AND {' AND '.join(conditions)}" 
+    else:
+        query = base_query
+        
+    query += " ORDER BY p.data_emissao DESC, p.id DESC" 
+    
+    try: 
+        cursor.execute(query, tuple(params)); 
+        return cursor.fetchall()
+    except sqlite3.Error as e: 
+        logger.error(f"Erro SQL buscar pendências: {e}")
+        return []
     finally:
         if conn: conn.close()
 
 def get_pendente_by_id_para_vinculo(pendente_id, db_name='polis_database.db'): 
     conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
     try:
-        cursor.execute("SELECT id, pedido_ref, data_emissao, filial, status FROM pendentes WHERE id = ?", (pendente_id,))
+        cursor.execute("SELECT id, pedido_ref, data_emissao, filial, status, valor FROM pendentes WHERE id = ?", (pendente_id,))
         return cursor.fetchone()
     except sqlite3.Error as e:
         logger.error(f"Erro SQL ao buscar pendente por ID ({pendente_id}) para vínculo: {e}")
@@ -387,15 +429,20 @@ def get_pendentes_finalizadas_para_selecao(db_name='polis_database.db'):
         cursor = conn.cursor()
         
         query = """
-            SELECT p.id, p.pedido_ref, p.filial, p.data_emissao 
+            SELECT p.id, p.pedido_ref, p.filial, p.data_emissao, p.valor
             FROM pendentes p
-            LEFT JOIN cobrancas c ON p.pedido_ref = c.pedido 
             WHERE LOWER(TRIM(p.status)) = LOWER('finalizado')
-              AND c.pedido IS NULL  
+              AND NOT EXISTS (
+                  SELECT 1 FROM cobrancas c 
+                  WHERE UPPER(TRIM(c.pedido)) = UPPER(TRIM(p.pedido_ref))
+                    AND LOWER(TRIM(c.os)) IN ('abastecimento', 'estoque', 'outros') 
+              )
             ORDER BY p.pedido_ref ASC
         """
         cursor.execute(query)
-        return cursor.fetchall()
+        pendentes = cursor.fetchall()
+        logger.debug(f"Pendentes finalizadas para seleção (não Abastecimento/Estoque/Outros em cobranças): {len(pendentes)}")
+        return pendentes
     except sqlite3.Error as e:
         logger.error(f"Erro SQL ao buscar pendentes finalizadas para seleção: {e}")
         return []
@@ -440,7 +487,7 @@ def _build_date_filter_sql(date_column, data_de, data_ate):
     return "", []
 
 
-# --- Funções para Dashboard e KPIs com Filtro de Data e Filial ---
+# --- Funções para Dashboard e KPIs com Filtro de Data e Filial (ESQUEMA ANTIGO DE COBRANÇAS) ---
 def get_count_pedidos_status_especifico(status_desejado, db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None; 
     conditions = [f"LOWER(status) = LOWER(?)"]
@@ -529,8 +576,10 @@ def get_pedidos_status_por_filial(status_desejado, db_name, data_de=None, data_a
 
 def get_count_os_status_especifico(status_desejado, db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None; date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
-    conditions = [f"LOWER(status) = LOWER(?)"]
+    conditions = [f"LOWER(status) = LOWER(?)", "os IS NOT NULL AND TRIM(os) != ''"] 
+    conditions.append("LOWER(TRIM(os)) NOT IN ('abastecimento', 'estoque', 'outros')") # Contar apenas OS reais
     final_params = [status_desejado.lower()]
+
     if date_filter_sql_part:
         conditions.append(date_filter_sql_part)
         final_params.extend(date_params)
@@ -552,8 +601,10 @@ def get_count_total_os_lancadas(db_name, data_de=None, data_ate=None, filial_fil
 
 def get_count_os_para_verificar(db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None; date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
-    conditions = [f"LOWER(TRIM(conformidade)) = LOWER(?)"]
+    conditions = [f"LOWER(TRIM(conformidade)) = LOWER(?)", "os IS NOT NULL AND TRIM(os) != ''"]
+    conditions.append("LOWER(TRIM(os)) NOT IN ('abastecimento', 'estoque', 'outros')")
     final_params = ['verificar']
+
     if date_filter_sql_part:
         conditions.append(date_filter_sql_part)
         final_params.extend(date_params)
@@ -572,7 +623,8 @@ def get_count_os_para_verificar(db_name, data_de=None, data_ate=None, filial_fil
 
 def get_os_status_por_filial(status_desejado, db_name, data_de=None, data_ate=None):
     conn = None; date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
-    conditions = [f"LOWER(status) = LOWER(?)", "filial IS NOT NULL", "TRIM(filial) != ''"]
+    conditions = [f"LOWER(status) = LOWER(?)", "filial IS NOT NULL", "TRIM(filial) != ''", "os IS NOT NULL AND TRIM(os) != ''"]
+    conditions.append("LOWER(TRIM(os)) NOT IN ('abastecimento', 'estoque', 'outros')")
     final_params = [status_desejado.lower()]
     if date_filter_sql_part:
         conditions.append(date_filter_sql_part)
@@ -580,7 +632,7 @@ def get_os_status_por_filial(status_desejado, db_name, data_de=None, data_ate=No
     where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        query = f"SELECT filial, COUNT(DISTINCT os) as count_os FROM cobrancas {where_clause} GROUP BY filial ORDER BY count_os DESC, filial ASC" # Corrigido para count_os
+        query = f"SELECT filial, COUNT(DISTINCT os) as count_os FROM cobrancas {where_clause} GROUP BY filial ORDER BY count_os DESC, filial ASC" 
         cursor.execute(query, tuple(final_params)); return cursor.fetchall()
     except sqlite3.Error as e: logger.error(f"Erro SQL OS status por filial '{status_desejado}': {e}"); return []
     finally:
@@ -589,6 +641,7 @@ def get_os_status_por_filial(status_desejado, db_name, data_de=None, data_ate=No
 def get_os_com_status_especifico(status_desejado, db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None; date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
     conditions = [f"LOWER(status) = LOWER(?)", "os IS NOT NULL", "TRIM(os) != ''"]
+    conditions.append("LOWER(TRIM(os)) NOT IN ('abastecimento', 'estoque', 'outros')")
     final_params = [status_desejado.lower()]
     if date_filter_sql_part:
         conditions.append(date_filter_sql_part)
@@ -739,37 +792,38 @@ def get_kpi_tempo_medio_resolucao_pendencias(db_name, data_de=None, data_ate=Non
 def get_kpi_valor_investido_por_categoria(db_name, categoria_os, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
     conditions = [
-        "LOWER(TRIM(c.os)) = LOWER(?)",
+        "LOWER(TRIM(c.os)) = LOWER(?)", 
         "LOWER(TRIM(p.status)) = LOWER('finalizado')" 
     ]
-    params = [categoria_os.lower()]
+    params_query = [categoria_os.lower()]
 
-    # Filtro de data é aplicado à data_emissao_pedido da tabela cobrancas
     date_filter_sql_part, date_params_sql = _build_date_filter_sql("c.data_emissao_pedido", data_de, data_ate)
-    if date_filter_sql_part: # date_filter_sql_part já inclui "c.data_emissao_pedido IS NOT NULL"
+    if date_filter_sql_part: 
         conditions.append(date_filter_sql_part)
-        params.extend(date_params_sql)
-    elif data_de or data_ate: # Se houver filtro de data, mas um deles for inválido, ainda precisamos garantir que a data não é nula
+        params_query.extend(date_params_sql)
+    elif data_de or data_ate: 
         conditions.append("c.data_emissao_pedido IS NOT NULL AND c.data_emissao_pedido != ''")
-
     
     if filial_filtro: 
         conditions.append("LOWER(TRIM(c.filial)) = LOWER(?)") 
-        params.append(filial_filtro.lower())
+        params_query.append(filial_filtro.lower())
 
-    where_clause = " WHERE " + " AND ".join(conditions)
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
     
     query = f"""
         SELECT SUM(p.valor) as total_valor
         FROM pendentes p
-        JOIN cobrancas c ON p.pedido_ref = c.pedido
+        JOIN cobrancas c ON UPPER(TRIM(p.pedido_ref)) = UPPER(TRIM(c.pedido))
         {where_clause}
     """
     try:
         conn = sqlite3.connect(db_name); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
-        cursor.execute(query, tuple(params))
+        logger.debug(f"Query KPI Valor Investido para '{categoria_os}': {query} com params {params_query}")
+        cursor.execute(query, tuple(params_query))
         resultado = cursor.fetchone()
-        return resultado['total_valor'] if resultado and resultado['total_valor'] is not None else 0.0
+        total_valor = resultado['total_valor'] if resultado and resultado['total_valor'] is not None else 0.0
+        logger.debug(f"Resultado KPI Valor Investido '{categoria_os}': {total_valor}")
+        return total_valor
     except sqlite3.Error as e:
         logger.error(f"Erro SQL KPI valor investido em '{categoria_os}': {e}")
         return 0.0
@@ -821,28 +875,33 @@ def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=Non
             end_date_obj = datetime.now()
             data_ate_query = end_date_obj.strftime('%Y-%m-%d')
         
-        conditions_cob = ["data_emissao_pedido IS NOT NULL"]
+        conditions_cob = []
         params_cob = []
         date_filter_sql_cob, params_cob_date = _build_date_filter_sql("data_emissao_pedido", data_de_query, data_ate_query)
         if date_filter_sql_cob: 
             conditions_cob.append(date_filter_sql_cob)
             params_cob.extend(params_cob_date)
+        else: 
+             conditions_cob.append("data_emissao_pedido IS NOT NULL AND data_emissao_pedido != ''")
+
         if filial_filtro:
             conditions_cob.append("LOWER(TRIM(filial)) = LOWER(?)")
             params_cob.append(filial_filtro.lower())
-        where_clause_cob = " WHERE " + " AND ".join(conditions_cob)
+        where_clause_cob = " WHERE " + " AND ".join(filter(None,conditions_cob))
         
-        conditions_pend = ["data_emissao IS NOT NULL"]
+        conditions_pend = []
         params_pend = []
         date_filter_sql_pend, params_pend_date = _build_date_filter_sql("data_emissao", data_de_query, data_ate_query)
         if date_filter_sql_pend: 
             conditions_pend.append(date_filter_sql_pend)
             params_pend.extend(params_pend_date)
+        else:
+            conditions_pend.append("data_emissao IS NOT NULL AND data_emissao != ''")
+
         if filial_filtro: 
             conditions_pend.append("LOWER(TRIM(filial)) = LOWER(?)")
             params_pend.append(filial_filtro.lower())
-        where_clause_pend = " WHERE " + " AND ".join(conditions_pend)
-
+        where_clause_pend = " WHERE " + " AND ".join(filter(None,conditions_pend))
 
         query_cobrancas = f"SELECT strftime('{date_format_sql}', data_emissao_pedido) as periodo, COUNT(DISTINCT pedido) as total_cobrancas FROM cobrancas {where_clause_cob} GROUP BY periodo ORDER BY periodo ASC;"
         cursor.execute(query_cobrancas, tuple(params_cob))
@@ -884,14 +943,16 @@ def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=Non
 
 def get_distribuicao_status_cobranca(db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
-    conditions = ["data_emissao_pedido IS NOT NULL"] 
+    conditions = [] 
     params = []
 
     date_filter_sql_part, date_params_sql = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
     if date_filter_sql_part:
         conditions.append(date_filter_sql_part)
         params.extend(date_params_sql)
-    
+    elif data_de or data_ate : 
+         conditions.append("data_emissao_pedido IS NOT NULL AND data_emissao_pedido != ''")
+
     if filial_filtro:
         conditions.append("LOWER(TRIM(filial)) = LOWER(?)")
         params.append(filial_filtro.lower())
@@ -909,7 +970,7 @@ def get_distribuicao_status_cobranca(db_name, data_de=None, data_ate=None, filia
     finally:
         if conn: conn.close()
 
-# --- CRUDs (mantidos) ---
+# --- CRUDs ---
 def get_cobranca_by_id(cobranca_id, db_name):
     conn = None
     try:
@@ -919,28 +980,50 @@ def get_cobranca_by_id(cobranca_id, db_name):
     finally:
         if conn: conn.close()
 
-def update_cobranca_db(cobranca_id, data, db_name):
+def update_cobranca_db(cobranca_id, data, db_name): 
     conn = None
     try:
         conn = sqlite3.connect(db_name); cursor = conn.cursor()
         data_atualizacao_utc = datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
-        if 'pedido' in data and 'os' in data:
-            cursor.execute("SELECT id FROM cobrancas WHERE pedido = ? AND os = ? AND id != ?", (data['pedido'], data['os'], cobranca_id))
-            if cursor.fetchone(): logger.warning(f"Update cobrança ID {cobranca_id} para Pedido/OS já existente."); return False 
+        
+        pedido_form = str(data.get('pedido','')).strip().upper()
+        os_form = str(data.get('os','')).strip() 
+        
+        cursor.execute("SELECT id FROM cobrancas WHERE UPPER(TRIM(pedido)) = ? AND os = ? AND id != ?", 
+                       (pedido_form, os_form, cobranca_id))
+        if cursor.fetchone(): 
+            logger.warning(f"Update cobrança ID {cobranca_id} para Pedido/OS já existente."); 
+            return False, "Combinação de Pedido e OS já existe."
+        
         data_emissao_pedido_val = data.get('data_emissao_pedido')
         if data_emissao_pedido_val and isinstance(data_emissao_pedido_val, str) and data_emissao_pedido_val.strip(): 
             data_emissao_pedido_val = format_date_for_db(data_emissao_pedido_val)
         elif not data_emissao_pedido_val: 
              data_emissao_pedido_val = None
-        else: 
-            existing_cobranca = get_cobranca_by_id(cobranca_id, db_name)
-            data_emissao_pedido_val = existing_cobranca['data_emissao_pedido'] if existing_cobranca else None
-
-        cursor.execute("UPDATE cobrancas SET pedido = ?, os = ?, filial = ?, placa = ?, transportadora = ?, conformidade = ?, status = ?, data_emissao_pedido = ?, data_importacao = ? WHERE id = ?",
-                       (data.get('pedido'), data.get('os'), data.get('filial'), data.get('placa'), data.get('transportadora'), data.get('conformidade'), data.get('status'), data_emissao_pedido_val, data_atualizacao_utc, cobranca_id))
-        conn.commit(); return True if cursor.rowcount > 0 else False
-    except sqlite3.IntegrityError as ie: logger.error(f"Erro Integridade SQL update cobrança ID {cobranca_id}: {ie}"); conn.rollback(); return False
-    except sqlite3.Error as e: logger.error(f"Erro SQL update cobrança ID {cobranca_id}: {e}"); conn.rollback(); return False
+        
+        cursor.execute("""UPDATE cobrancas SET 
+                          pedido = ?, os = ?, filial = ?, placa = ?, transportadora = ?, 
+                          conformidade = ?, status = ?, 
+                          data_emissao_pedido = ?, data_importacao = ? 
+                          WHERE id = ?""",
+                       (pedido_form, os_form, 
+                        str(data.get('filial','')).strip(), 
+                        str(data.get('placa','')).strip().upper() if data.get('placa') else None, 
+                        str(data.get('transportadora','')).strip(), 
+                        categorizar_conformidade(data.get('conformidade')), 
+                        categorizar_status_cobranca(data.get('status')), 
+                        data_emissao_pedido_val, data_atualizacao_utc, cobranca_id))
+        conn.commit(); return True, "Cobrança atualizada com sucesso."
+    except sqlite3.IntegrityError as ie: 
+        logger.error(f"Erro Integridade SQL update cobrança ID {cobranca_id}: {ie}"); conn.rollback(); 
+        return False, f"Erro de integridade: {ie}"
+    except sqlite3.Error as e: 
+        logger.error(f"Erro SQL update cobrança ID {cobranca_id}: {e}"); conn.rollback(); 
+        return False, f"Erro de banco de dados: {e}"
+    except Exception as e_gen:
+        logger.error(f"Erro geral ao atualizar cobrança ID {cobranca_id}: {e_gen}", exc_info=True)
+        if conn: conn.rollback()
+        return False, f"Erro inesperado: {str(e_gen)}"
     finally:
         if conn: conn.close()
 
@@ -978,15 +1061,22 @@ def update_pendencia_db(pendencia_id, data, db_name):
         data_emissao_formatada_db = format_date_for_db(data.get('data_emissao')) if data.get('data_emissao') else None
         data_finalizacao_real_db = format_date_for_db(data.get('data_finalizacao_real')) if data.get('data_finalizacao_real') else None
 
+        pedido_ref_norm = str(data.get('pedido_ref','')).strip().upper()
+
         cursor.execute("""
             UPDATE pendentes SET pedido_ref = ?, fornecedor = ?, filial = ?, valor = ?, status = ?,
             data_emissao = ?, data_finalizacao_real = ?, data_importacao = ? 
             WHERE id = ?
-        """, (data.get('pedido_ref'), data.get('fornecedor'), data.get('filial'), valor_float, 
+        """, (pedido_ref_norm, data.get('fornecedor'), data.get('filial'), valor_float, 
               data.get('status'), data_emissao_formatada_db, data_finalizacao_real_db,
               data_atualizacao_utc, pendencia_id))
         conn.commit(); return True if cursor.rowcount > 0 else False
-    except sqlite3.Error as e: logger.error(f"Erro SQL update pendência ID {pendencia_id}: {e}"); conn.rollback(); return False
+    except sqlite3.IntegrityError as ie: 
+        logger.error(f"Erro de Integridade ao atualizar pendência ID {pendencia_id} (pedido_ref duplicado?): {ie}")
+        if conn: conn.rollback()
+        return False
+    except sqlite3.Error as e: 
+        logger.error(f"Erro SQL update pendência ID {pendencia_id}: {e}"); conn.rollback(); return False
     finally:
         if conn: conn.close()
 
@@ -1000,87 +1090,101 @@ def delete_pendencia_db(pendencia_id, db_name):
     finally:
         if conn: conn.close()
 
-# FUNÇÃO PARA ADICIONAR/ATUALIZAR COBRANÇA MANUALMENTE (OS)
-def add_or_update_cobranca_manual(data, db_name):
+def add_or_update_cobranca_manual(data, db_name): # Revertido para esquema antigo
     conn = None
     try:
         conn = sqlite3.connect(db_name)
         conn.row_factory = sqlite3.Row 
         cursor = conn.cursor()
 
-        pedido = str(data.get('pedido','')).strip()
-        os_val = str(data.get('os','')).strip()
+        pedido = str(data.get('pedido','')).strip().upper() 
+        os_val = str(data.get('os','')).strip() 
 
         if not pedido or not os_val:
-            return False, "Pedido e OS são obrigatórios."
+            return False, "Pedido e OS/Referência de Custo são obrigatórios."
 
         data_emissao_pedido_db = None
-        data_emissao_pedido_input = data.get('data_emissao_pedido') # Pode ser AAAA-MM-DD ou data_emissao da pendente
+        data_emissao_pedido_input = data.get('data_emissao_pedido') 
+        data_emissao_herdada = data.get('data_emissao_herdada')
 
         if data_emissao_pedido_input and str(data_emissao_pedido_input).strip():
-            # Se for uma string que já está no formato do banco (YYYY-MM-DD HH:MM:SS), usa diretamente.
-            # Caso contrário, tenta formatar.
             if re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$', str(data_emissao_pedido_input)):
                 data_emissao_pedido_db = str(data_emissao_pedido_input)
             else:
                 data_emissao_pedido_db = format_date_for_db(data_emissao_pedido_input)
             
             if not data_emissao_pedido_db:
-                logger.warning(f"Data de emissão do pedido '{data_emissao_pedido_input}' inválida para OS manual. Será ignorada se não encontrada em pendentes.")
+                logger.warning(f"Data de emissão do pedido '{data_emissao_pedido_input}' inválida. Será ignorada se não encontrada em pendentes.")
         
-        # Se ainda for None e não foi explicitamente herdada, tenta buscar da tabela pendentes
-        if not data_emissao_pedido_db and 'data_emissao_herdada' not in data: 
-            cursor.execute("SELECT data_emissao FROM pendentes WHERE pedido_ref = ? AND data_emissao IS NOT NULL", (pedido,))
+        if not data_emissao_pedido_db and data_emissao_herdada:
+             data_emissao_pedido_db = data_emissao_herdada 
+             logger.info(f"Usando data de emissão herdada '{data_emissao_pedido_db}' da pendente para o pedido {pedido}.")
+        elif not data_emissao_pedido_db : 
+            cursor.execute("SELECT data_emissao FROM pendentes WHERE UPPER(TRIM(pedido_ref)) = ? AND data_emissao IS NOT NULL", (pedido,))
             pendente_data = cursor.fetchone()
             if pendente_data:
                 data_emissao_pedido_db = pendente_data['data_emissao'] 
                 logger.info(f"Data de emissão '{data_emissao_pedido_db}' obtida da pendente para o pedido {pedido}.")
-        elif 'data_emissao_herdada' in data and data['data_emissao_herdada']: 
-             data_emissao_pedido_db = data['data_emissao_herdada']
 
-
-        cursor.execute("SELECT id, data_emissao_pedido FROM cobrancas WHERE pedido = ? AND os = ?", (pedido, os_val))
+        cursor.execute("SELECT id, data_emissao_pedido FROM cobrancas WHERE UPPER(TRIM(pedido)) = ? AND os = ?", 
+                       (pedido, os_val))
         existing_record = cursor.fetchone()
         
         data_importacao_utc = datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
         
         status_cobranca_manual = categorizar_status_cobranca(data.get('status'))
         conformidade_manual = categorizar_conformidade(data.get('conformidade'))
-
+        
         if existing_record:
             data_emissao_pedido_val_final = existing_record['data_emissao_pedido'] 
             if data_emissao_pedido_db: 
                  data_emissao_pedido_val_final = data_emissao_pedido_db
 
+            update_params = (
+                str(data.get('filial','')).strip(), 
+                str(data.get('placa','')).strip().upper() if data.get('placa') else None, 
+                str(data.get('transportadora','')).strip(), 
+                conformidade_manual, 
+                status_cobranca_manual, 
+                data_emissao_pedido_val_final, 
+                data_importacao_utc,
+                existing_record['id']
+            )
             cursor.execute("""
                 UPDATE cobrancas 
-                SET filial=?, placa=?, transportadora=?, status=?, conformidade=?, 
+                SET filial=?, placa=?, transportadora=?, conformidade=?, status=?, 
                     data_emissao_pedido=?, data_importacao=?
-                WHERE id=?
-            """, (str(data.get('filial','')).strip(), str(data.get('placa','')).strip().upper(), 
-                  str(data.get('transportadora','')).strip(), status_cobranca_manual, conformidade_manual, 
-                  data_emissao_pedido_val_final, data_importacao_utc, existing_record['id']))
+                WHERE id=? 
+            """, update_params) 
             conn.commit()
-            logger.info(f"Cobrança atualizada: Pedido {pedido}, OS {os_val}")
-            return True, f"Cobrança para OS {os_val} (Pedido {pedido}) atualizada com sucesso."
+            logger.info(f"Cobrança atualizada: Pedido {pedido}, OS/Ref {os_val}")
+            return True, f"Cobrança para Pedido {pedido} (OS/Ref: {os_val}) atualizada com sucesso."
         else:
+            insert_params = (
+                pedido, os_val, 
+                str(data.get('filial','')).strip(), 
+                str(data.get('placa','')).strip().upper() if data.get('placa') else None, 
+                str(data.get('transportadora','')).strip(), 
+                conformidade_manual,
+                status_cobranca_manual, 
+                data_emissao_pedido_db, data_importacao_utc
+            )
             cursor.execute("""
                 INSERT INTO cobrancas 
-                (pedido, os, placa, transportadora, status, conformidade, filial, data_emissao_pedido, data_importacao)
+                (pedido, os, filial, placa, transportadora, conformidade, status, 
+                 data_emissao_pedido, data_importacao)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (pedido, os_val, str(data.get('placa','')).strip().upper(), 
-                  str(data.get('transportadora','')).strip(), status_cobranca_manual, conformidade_manual,
-                  str(data.get('filial','')).strip(), data_emissao_pedido_db, data_importacao_utc))
+            """, insert_params)
             conn.commit()
-            logger.info(f"Nova cobrança adicionada: Pedido {pedido}, OS {os_val}")
-            return True, f"Nova cobrança para OS {os_val} (Pedido {pedido}) adicionada com sucesso."
+            logger.info(f"Nova cobrança adicionada: Pedido {pedido}, OS/Ref {os_val}")
+            return True, f"Nova cobrança para Pedido {pedido} (OS/Ref: {os_val}) adicionada com sucesso."
 
     except sqlite3.Error as e:
-        logger.error(f"Erro de banco de dados ao adicionar/atualizar OS manual: {e}")
+        logger.error(f"Erro de banco de dados ao adicionar/atualizar cobrança: {e}")
         if conn: conn.rollback()
         return False, f"Erro de banco de dados: {e}"
     except Exception as e_gen:
-        logger.error(f"Erro geral ao adicionar/atualizar OS manual: {e_gen}", exc_info=True)
+        logger.error(f"Erro geral ao adicionar/atualizar cobrança: {e_gen}", exc_info=True)
         if conn: conn.rollback()
         return False, f"Erro inesperado: {str(e_gen)}"
     finally:

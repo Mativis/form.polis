@@ -13,6 +13,19 @@ import re
 import pandas as pd
 import io
 
+# Importar do novo módulo de mineração (se existir)
+try:
+    from utils.transac_miner import iniciar_mineracao_pedidos_finalizados, URL_LOGIN as TRANSAC_URL_LOGIN
+except ImportError:
+    # Configurar logger antes de usá-lo, caso o import falhe e o logger do app não esteja pronto
+    if not logging.getLogger(__name__).hasHandlers():
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s')
+    logger_app_fallback = logging.getLogger(__name__)
+    logger_app_fallback.warning("Módulo 'transac_miner' não encontrado ou 'iniciar_mineracao_pedidos_finalizados' não definido. Funcionalidade de Laboratório estará limitada.")
+    def iniciar_mineracao_pedidos_finalizados(*args, **kwargs): # Fallback
+        return {"sucesso_total": 0, "falhas_total": 0, "mensagens": ["Funcionalidade de mineração não está disponível."]}
+    TRANSAC_URL_LOGIN = "#" # Fallback URL
+
 from utils.excel_processor import (
     processar_excel_cobrancas,
     processar_excel_pendentes,
@@ -60,8 +73,12 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' 
 ALLOWED_EXTENSIONS = {'xlsx', 'csv'}
 log_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'polis_app.log')
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s', handlers=[ logging.FileHandler(log_file_path, encoding='utf-8'), logging.StreamHandler()])
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s', handlers=[ logging.FileHandler(log_file_path, encoding='utf-8'), logging.StreamHandler()])
+logger = logging.getLogger(__name__) 
+utils_logger = logging.getLogger('utils') 
+utils_logger.setLevel(logging.DEBUG)
+
+
 if not os.path.exists(app.config['UPLOAD_FOLDER']): os.makedirs(app.config['UPLOAD_FOLDER'])
 def get_db():
     db = getattr(g, '_database', None)
@@ -292,6 +309,8 @@ def indicadores_desempenho():
     data_de_input = request.args.get('data_de', None) 
     data_ate_input = request.args.get('data_ate', None)
     filial_selecionada_filtro = request.args.get('filial_filtro', None)
+    if filial_selecionada_filtro == "": 
+        filial_selecionada_filtro = None
 
     data_de_para_sql = None
     data_ate_para_sql = None
@@ -309,10 +328,6 @@ def indicadores_desempenho():
             try:
                 data_de_obj = datetime.strptime(data_de_input, '%d/%m/%Y')
                 data_de_para_sql = data_de_obj.strftime('%Y-%m-%d')
-                # data_de_para_template já tem o input original (DD/MM/AAAA) se a conversão falhou antes
-                # mas se a conversão para AAAA-MM-DD foi bem sucedida, usamos esse para o value do flatpickr
-                # No entanto, o Flatpickr espera AAAA-MM-DD no value para converter para DD/MM/AAAA na exibição.
-                # Então, se a conversão for bem-sucedida, data_de_para_template também deve ser AAAA-MM-DD.
                 data_de_para_template = data_de_para_sql 
             except ValueError:
                 flash(f"Formato de 'Data De' ({data_de_input}) inválido. Use o seletor ou AAAA-MM-DD.", "warning")
@@ -354,18 +369,16 @@ def indicadores_desempenho():
     }
     chart_data = {'evolucao_meses': [], 'evolucao_cobrancas': [], 'evolucao_pendencias': [], 'distribuicao_status_labels': [], 'distribuicao_status_valores': []}
     
-    # Buscar filiais para o dropdown do filtro
     filiais_cobrancas = get_distinct_values('filial', 'cobrancas', db_path)
-    filiais_pendentes = get_distinct_values('filial', 'pendentes', db_path) # Para KPIs de pendentes
-    # Combina e remove duplicatas, depois ordena
+    filiais_pendentes = get_distinct_values('filial', 'pendentes', db_path)
     todas_as_filiais = sorted(list(set(filiais_cobrancas + filiais_pendentes)))
-
 
     try:
         kpis_data['taxa_cobranca_efetuada'] = get_kpi_taxa_cobranca_efetuada(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
         kpis_data['percentual_nao_conforme'] = get_kpi_percentual_nao_conforme(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
         kpis_data['valor_total_pendencias'] = get_kpi_valor_total_pendencias_ativas(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
         kpis_data['tempo_medio_resolucao'] = get_kpi_tempo_medio_resolucao_pendencias(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
+        
         kpis_data['valor_investido_abastecimento'] = get_kpi_valor_investido_abastecimento(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
         kpis_data['valor_investido_estoque'] = get_kpi_valor_investido_estoque(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
         kpis_data['valor_investido_outros'] = get_kpi_valor_investido_outros(db_path, data_de_para_sql, data_ate_para_sql, filial_selecionada_filtro)
@@ -390,7 +403,7 @@ def indicadores_desempenho():
                            filtros_data={'data_de': data_de_para_template or '', 
                                          'data_ate': data_ate_para_template or ''},
                            lista_filiais=todas_as_filiais,
-                           filial_selecionada_atual=filial_selecionada_filtro # Renomeado para clareza
+                           filial_selecionada_atual=filial_selecionada_filtro
                            )
 
 
@@ -407,7 +420,7 @@ def integrar_os():
         if action == 'add_os_manual':
             dados_cobranca = {
                 'pedido': request.form.get('pedido', '').strip(), 
-                'os': request.form.get('os', '').strip(),
+                'os': request.form.get('os', '').strip(), 
                 'placa': request.form.get('placa', '').strip().upper(), 
                 'transportadora': request.form.get('transportadora', '').strip(),
                 'status': request.form.get('status_cobranca', '').strip(), 
@@ -431,12 +444,12 @@ def integrar_os():
         elif action == 'vincular_os_pendente':
             id_pendente_selecionada = request.form.get('id_pendente_selecionada')
             dados_nova_os = {
-                'os': request.form.get('os', '').strip(),
+                'os': request.form.get('os', '').strip(), 
                 'placa': request.form.get('placa', '').strip().upper(),
                 'transportadora': request.form.get('transportadora', '').strip(),
                 'status_cobranca': request.form.get('status_cobranca', '').strip(), 
                 'conformidade': request.form.get('conformidade', '').strip(),
-                'filial': request.form.get('filial', '').strip(),
+                'filial': request.form.get('filial', '').strip()
             }
             form_data_vincular = dados_nova_os.copy()
             form_data_vincular['id_pendente_selecionada'] = id_pendente_selecionada 
@@ -450,13 +463,13 @@ def integrar_os():
                 else:
                     dados_cobranca_para_vincular = {
                         'pedido': pendente_original['pedido_ref'],
-                        'os': dados_nova_os['os'],
+                        'os': dados_nova_os['os'], 
                         'placa': dados_nova_os['placa'],
                         'transportadora': dados_nova_os['transportadora'],
                         'status': dados_nova_os['status_cobranca'], 
                         'conformidade': dados_nova_os['conformidade'],
                         'filial': dados_nova_os['filial'] if dados_nova_os['filial'] else pendente_original['filial'],
-                        'data_emissao_pedido': pendente_original['data_emissao'] # Usar data_emissao da pendente
+                        'data_emissao_herdada': pendente_original['data_emissao'] 
                     }
                     success, message = add_or_update_cobranca_manual(dados_cobranca_para_vincular, app.config['DATABASE'])
                     flash(message, "success" if success else "error")
@@ -481,7 +494,7 @@ def abastecimento_estoque():
         
         ids_pendentes_selecionadas = request.form.getlist('ids_pendentes_selecionadas')
         categoria_custo = request.form.get('categoria_custo') 
-        placa_opcional = request.form.get('placa', '').strip().upper() or "N/A"
+        placa_opcional = request.form.get('placa', '').strip().upper() or "N/A" 
         filial_opcional = request.form.get('filial', '').strip()
 
         errors = []
@@ -507,17 +520,17 @@ def abastecimento_estoque():
                     dados_cobranca = {
                         'pedido': pendente_original['pedido_ref'],
                         'os': categoria_custo, 
-                        'placa': placa_opcional,
-                        'transportadora': "TRANSAC TRANSPORTE ROD. LTDA",
-                        'status': "Com cobrança",
+                        'placa': placa_opcional if categoria_custo == 'Abastecimento' else None, 
+                        'transportadora': "TRANSAC TRANSPORTE ROD. LTDA", 
+                        'status': "Com cobrança", 
                         'conformidade': "Conforme", 
                         'filial': filial_opcional if filial_opcional else pendente_original['filial'],
-                        'data_emissao_pedido': pendente_original['data_emissao'] # Data de emissão da pendente
+                        'data_emissao_herdada': pendente_original['data_emissao']
                     }
                     success, message = add_or_update_cobranca_manual(dados_cobranca, app.config['DATABASE'])
                     if success:
                         sucessos += 1
-                        log_audit(f"CUSTO_LANCADO_{categoria_custo.upper()}", f"Pedido: {pendente_original['pedido_ref']}, OS: {categoria_custo}")
+                        log_audit(f"CUSTO_LANCADO_{categoria_custo.upper()}", f"Pedido: {pendente_original['pedido_ref']}, OS/Ref: {categoria_custo}")
                     else:
                         falhas += 1
                         flash(f"Falha ao lançar custo para Pedido {pendente_original['pedido_ref']}: {message}", "error")
@@ -539,6 +552,56 @@ def abastecimento_estoque():
                            pendentes_finalizadas_lista=pendentes_finalizadas_lista,
                            form_data=form_data_repop) 
 
+@app.route('/admin/laboratorio', methods=['GET', 'POST'])
+@admin_required
+def laboratorio():
+    form_data = {}
+    pedidos_para_minerar = get_pendentes_finalizadas_para_selecao(app.config['DATABASE'])
+    
+    if request.method == 'POST':
+        form_data = request.form
+        numeros_pendentes_ids_selecionados = request.form.getlist('pedidos_a_minerar_ids') 
+        
+        if not numeros_pendentes_ids_selecionados:
+            flash("Nenhum pedido selecionado para mineração.", "warning")
+        else:
+            pedidos_refs_para_minerar = []
+            for pendente_id_str in numeros_pendentes_ids_selecionados:
+                try:
+                    pendente = get_pendente_by_id_para_vinculo(int(pendente_id_str), app.config['DATABASE'])
+                    if pendente and pendente['pedido_ref']:
+                        pedidos_refs_para_minerar.append(pendente['pedido_ref'])
+                    else:
+                        logger.warning(f"Pendente ID {pendente_id_str} não encontrado ou sem pedido_ref para mineração.")
+                except ValueError:
+                     logger.warning(f"ID de pendente inválido '{pendente_id_str}' na seleção para mineração.")
+
+            if not pedidos_refs_para_minerar:
+                 flash("Nenhum pedido válido encontrado para iniciar a mineração.", "warning")
+            else:
+                flash(f"Iniciando mineração (simulada) para {len(pedidos_refs_para_minerar)} pedido(s): {', '.join(pedidos_refs_para_minerar)}. Este processo pode demorar.", "info")
+                
+                resultado_mineracao = iniciar_mineracao_pedidos_finalizados(
+                    db_name=app.config['DATABASE'], 
+                    lista_numeros_pedidos_refs=pedidos_refs_para_minerar
+                )
+                
+                for msg in resultado_mineracao.get("mensagens", []):
+                    if "sucesso" in msg.lower() or "processados" in msg.lower() or "salvos" in msg.lower():
+                        flash(msg, "success")
+                    elif "falha" in msg.lower() or "ignorado" in msg.lower() or "erro" in msg.lower():
+                        flash(msg, "error")
+                    else:
+                        flash(msg, "info")
+                
+                pedidos_para_minerar = get_pendentes_finalizadas_para_selecao(app.config['DATABASE'])
+                form_data = {} 
+
+    return render_template('admin/laboratorio.html', 
+                           pedidos_para_minerar=pedidos_para_minerar,
+                           form_data=form_data, 
+                           url_login_transac=TRANSAC_URL_LOGIN)
+
 
 # --- CRUD para Cobranças ---
 @app.route('/cobranca/<int:cobranca_id>/edit', methods=['GET', 'POST'])
@@ -547,21 +610,31 @@ def edit_cobranca(cobranca_id):
     cobranca = get_cobranca_by_id(cobranca_id, app.config['DATABASE'])
     if not cobranca: log_audit("EDIT_COBRANCA_NOT_FOUND", f"ID {cobranca_id} não encontrado."); flash("Cobrança não encontrada.", "error"); return redirect(url_for('relatorio_cobrancas'))
     opcoes_status = ["Com cobrança", "Sem cobrança"]; opcoes_conformidade = ["Conforme", "Verificar"]
+    
     form_data_repopulate = dict(cobranca) 
+
     if request.method == 'POST':
-        form_data_repopulate = {k: request.form.get(k, '').strip() for k in cobranca.keys() if k != 'id'}
-        form_data_repopulate['conformidade'] = form_data_repopulate.get('conformidade','').strip()
-        form_data_repopulate['status'] = form_data_repopulate.get('status','').strip()
-        form_data_repopulate['data_emissao_pedido'] = request.form.get('data_emissao_pedido', cobranca['data_emissao_pedido'] if cobranca['data_emissao_pedido'] else '').strip()
-        if not form_data_repopulate['pedido'] or not form_data_repopulate['os']: flash("Pedido e OS são campos obrigatórios.", "error")
-        elif form_data_repopulate['status'] not in opcoes_status: flash("Valor inválido para Status.", "error")
-        elif form_data_repopulate['conformidade'] not in opcoes_conformidade: flash("Valor inválido para Conformidade.", "error")
+        form_data_repopulate = request.form.to_dict()
+        
+        if not form_data_repopulate.get('pedido') or not form_data_repopulate.get('os'):
+            flash("Pedido e OS/Referência são campos obrigatórios.", "error")
+        elif form_data_repopulate.get('status') not in opcoes_status: flash("Valor inválido para Status.", "error")
+        elif form_data_repopulate.get('conformidade') not in opcoes_conformidade: flash("Valor inválido para Conformidade.", "error")
         else:
-            if update_cobranca_db(cobranca_id, form_data_repopulate, app.config['DATABASE']):
-                log_audit("EDIT_COBRANCA_SUCCESS", f"Cobrança ID {cobranca_id} atualizada."); flash("Cobrança atualizada!", "success"); return redirect(url_for('relatorio_cobrancas'))
-            else: log_audit("EDIT_COBRANCA_FAILURE", f"Falha ao atualizar ID {cobranca_id}."); flash("Erro ao atualizar. Pedido/OS duplicado?", "error")
-        return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade)
-    return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade)
+            success, message = update_cobranca_db(cobranca_id, form_data_repopulate, app.config['DATABASE'])
+            if success:
+                log_audit("EDIT_COBRANCA_SUCCESS", f"Cobrança ID {cobranca_id} atualizada."); 
+                flash(message, "success"); 
+                return redirect(url_for('relatorio_cobrancas'))
+            else: 
+                log_audit("EDIT_COBRANCA_FAILURE", f"Falha ao atualizar ID {cobranca_id}. Msg: {message}"); 
+                flash(message, "error")
+        return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, 
+                               opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade)
+    
+    return render_template('edit_cobranca.html', cobranca=form_data_repopulate, cobranca_id_for_url=cobranca_id, 
+                           opcoes_status=opcoes_status, opcoes_conformidade=opcoes_conformidade)
+
 @app.route('/cobranca/<int:cobranca_id>/delete', methods=['POST'])
 @login_required 
 def delete_cobranca_route(cobranca_id):
@@ -621,9 +694,23 @@ def relatorio_cobrancas():
     filtros_query = {k: v for k, v in filtros_form.items() if v}
     try:
         cobrancas = get_cobrancas(filtros=filtros_query, db_name=app.config['DATABASE'])
-        distinct_status = ["Com cobrança", "Sem cobrança"]; distinct_filiais = get_distinct_values('filial', 'cobrancas', app.config['DATABASE']); distinct_conformidade = ["Conforme", "Verificar"]
-        return render_template('relatorio_cobrancas.html', cobrancas=cobrancas, filtros=filtros_form, distinct_status=distinct_status, distinct_filiais=distinct_filiais, distinct_conformidade=distinct_conformidade) 
-    except Exception as e: logger.error(f"Erro relatório cobranças: {e}", exc_info=True); flash("Erro ao carregar relatório.", "error"); return render_template('relatorio_cobrancas.html', cobrancas=[], filtros=filtros_form, distinct_status=[], distinct_filiais=[], distinct_conformidade=[])
+        distinct_status_cobranca = get_distinct_values('status', 'cobrancas', app.config['DATABASE'])
+        distinct_filiais_cobranca = get_distinct_values('filial', 'cobrancas', app.config['DATABASE'])
+        distinct_conformidade_cobranca = get_distinct_values('conformidade', 'cobrancas', app.config['DATABASE'])
+        
+        return render_template('relatorio_cobrancas.html', 
+                               cobrancas=cobrancas, 
+                               filtros=filtros_form, 
+                               distinct_status_cobranca=distinct_status_cobranca, 
+                               distinct_filiais_cobranca=distinct_filiais_cobranca, 
+                               distinct_conformidade_cobranca=distinct_conformidade_cobranca) 
+    except Exception as e: 
+        logger.error(f"Erro relatório cobranças: {e}", exc_info=True); 
+        flash("Erro ao carregar relatório de cobranças.", "error"); 
+        return render_template('relatorio_cobrancas.html', cobrancas=[], filtros=filtros_form, 
+                               distinct_status_cobranca=[], distinct_filiais_cobranca=[], 
+                               distinct_conformidade_cobranca=[])
+
 @app.route('/relatorio-pendentes')
 @login_required
 def relatorio_pendentes():
@@ -680,11 +767,8 @@ def imprimir_visualizacao_pendentes():
         pendentes_data = get_pendentes(filtros=filtros_query, db_name=app.config['DATABASE'])
         now_sp = datetime.now(pytz.timezone('America/Sao_Paulo')); data_geracao = now_sp.strftime('%d/%m/%Y %H:%M:%S')
         log_audit("VIEW_PRINT_PENDENCIAS", f"Filtros: {filtros_form}")
-        pagina_anterior_com_filtros = url_for('relatorio_pendentes', **request.args)
         return render_template('reports/pendentes_pdf.html', pendentes=pendentes_data, filtros=filtros_form, 
-                               usuario_gerador=current_user.username, data_geracao=data_geracao,
-                               pagina_anterior_url=pagina_anterior_com_filtros, 
-                               pagina_anterior_texto="Relatório de Pendências")
+                               usuario_gerador=current_user.username, data_geracao=data_geracao)
     except Exception as e: 
         logger.error(f"Erro ao gerar visualização para impressão de pendências: {e}",exc_info=True)
         log_audit("VIEW_PRINT_PENDENCIAS_ERROR",f"Erro: {e}, Filtros: {filtros_form}")
@@ -701,11 +785,8 @@ def imprimir_visualizacao_cobrancas():
         cobrancas_data = get_cobrancas(filtros=filtros_query, db_name=app.config['DATABASE'])
         now_sp = datetime.now(pytz.timezone('America/Sao_Paulo')); data_geracao = now_sp.strftime('%d/%m/%Y %H:%M:%S')
         log_audit("VIEW_PRINT_COBRANCAS", f"Filtros: {filtros_form}")
-        pagina_anterior_com_filtros = url_for('relatorio_cobrancas', **request.args)
         return render_template('reports/cobrancas_print_view.html', cobrancas=cobrancas_data, filtros=filtros_form, 
-                               usuario_gerador=current_user.username, data_geracao=data_geracao,
-                               pagina_anterior_url=pagina_anterior_com_filtros,
-                               pagina_anterior_texto="Relatório de Cobranças")
+                               usuario_gerador=current_user.username, data_geracao=data_geracao)
     except Exception as e: 
         logger.error(f"Erro ao gerar visualização para impressão de cobranças: {e}", exc_info=True)
         log_audit("VIEW_PRINT_COBRANCAS_ERROR", f"Erro: {e}, Filtros: {filtros_form}")
@@ -721,10 +802,18 @@ def exportar_excel_cobrancas():
     try:
         cobrancas_data = get_cobrancas(filtros=filtros_query, db_name=app.config['DATABASE'])
         if not cobrancas_data: flash("Nenhum dado para exportar com os filtros aplicados.", "warning"); return redirect(url_for('relatorio_cobrancas', **filtros_form))
+        
         dados_para_df = [dict(row) for row in cobrancas_data]
         df = pd.DataFrame(dados_para_df)
-        colunas_excel = {'id': 'ID', 'pedido': 'Pedido', 'os': 'OS', 'filial': 'Filial', 'placa': 'Placa', 'transportadora': 'Transportadora', 'conformidade': 'Conformidade', 'status': 'Status', 'data_importacao_fmt': 'Data Importação', 'data_emissao_pedido_fmt': 'Data Emissão Pedido'}
+        
+        colunas_excel = {
+            'id': 'ID', 'pedido': 'Pedido', 'os': 'OS/Referência', 'filial': 'Filial', 
+            'placa': 'Placa', 'transportadora': 'Transportadora', 'conformidade': 'Conformidade', 
+            'status': 'Status', 'data_emissao_pedido_fmt': 'Data Emissão', 
+            'data_importacao_fmt': 'Data Importação'
+        }
         df_export = df[[col for col in colunas_excel.keys() if col in df.columns]].rename(columns=colunas_excel)
+        
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer: df_export.to_excel(writer, index=False, sheet_name='Cobrancas')
         output.seek(0); filename = f"relatorio_cobrancas_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
