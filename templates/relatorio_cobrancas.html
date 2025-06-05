@@ -3,7 +3,6 @@
 {% block title %}Relatório de Cobranças{% endblock %}
 
 {% block content %}
-    {# O botão Voltar é tratado pelo base.html se as variáveis forem passadas pela rota #}
     <h2 class="page-title"><i class="fas fa-file-invoice-dollar"></i> Relatório de Cobranças</h2>
 
     <div class="card filter-form mb-4">
@@ -65,7 +64,6 @@
                     <button type="button" onclick="exportarCobrancasExcel()" class="btn btn-success btn-sm">
                         <i class="fas fa-file-excel"></i> Exportar Excel
                     </button>
-                    {# NOVO BOTÃO DE VISUALIZAR IMPRESSÃO #}
                     <button type="button" onclick="visualizarImpressaoCobrancas()" class="btn btn-info btn-sm">
                         <i class="fas fa-print"></i> Visualizar Impressão
                     </button>
@@ -78,7 +76,7 @@
         <div class="card-body table-responsive-container">
             {% if cobrancas %}
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover">
+                    <table class="table table-striped table-hover"> 
                         <thead>
                             <tr>
                                 <th class="col-id">ID</th>
@@ -89,7 +87,7 @@
                                 <th>Transportadora</th>
                                 <th class="col-conformidade">Conformidade</th>
                                 <th class="col-status">Status</th>
-                                <th class="col-date">Data Emissão Ped.</th> {# Nova Coluna #}
+                                <th class="col-date">Data Emissão Ped.</th>
                                 <th class="col-date">Importado em</th>
                                 <th class="col-actions text-center">Ações</th>
                             </tr>
@@ -129,7 +127,7 @@
                                         {{ cobranca.status | default('N/A') }}
                                     </span>
                                 </td>
-                                <td class="cell-date">{{ cobranca.data_emissao_pedido_fmt | default('N/A') }}</td> {# Nova Coluna #}
+                                <td class="cell-date">{{ cobranca.data_emissao_pedido_fmt | default('N/A') }}</td>
                                 <td class="cell-date">{{ cobranca.data_importacao_fmt | default('N/A') }}</td>
                                 <td class="cell-actions text-center">
                                     <a href="{{ url_for('edit_cobranca', cobranca_id=cobranca.id) }}" class="btn btn-sm btn-info" title="Editar">
@@ -153,15 +151,15 @@
                 <p>Nenhuma cobrança encontrada com os filtros aplicados ou não há cobranças registadas.</p>
             </div>
             {% endif %}
-        </div> 
-    </div> 
+        </div>
+    </div>
 {% endblock %}
 
 {% block scripts_extra %}
 {{ super() }}
 <script>
 function exportarCobrancasExcel() {
-    const form = document.getElementById('cobrancasFilterForm'); 
+    const form = document.getElementById('cobrancasFilterForm');
     const params = new URLSearchParams();
     if (form.filtro_pedido.value) params.append('filtro_pedido', form.filtro_pedido.value);
     if (form.filtro_os.value) params.append('filtro_os', form.filtro_os.value);
@@ -171,22 +169,20 @@ function exportarCobrancasExcel() {
     if (form.filtro_conformidade.value) params.append('filtro_conformidade', form.filtro_conformidade.value);
     if (form.filtro_data_emissao_de.value) params.append('filtro_data_emissao_de', form.filtro_data_emissao_de.value);
     if (form.filtro_data_emissao_ate.value) params.append('filtro_data_emissao_ate', form.filtro_data_emissao_ate.value);
-    
+
     const exportUrl = "{{ url_for('exportar_excel_cobrancas') }}?" + params.toString();
     window.location.href = exportUrl;
 }
 
-// NOVA FUNÇÃO JAVASCRIPT PARA VISUALIZAR IMPRESSÃO
 function visualizarImpressaoCobrancas() {
     const form = document.getElementById('cobrancasFilterForm');
     const params = new URLSearchParams(new FormData(form));
     const cleanParams = new URLSearchParams();
-    for (const [key, value] of params) { 
-        if (value && value.trim() !== '') { 
+    for (const [key, value] of params) {
+        if (value && value.trim() !== '') {
             cleanParams.append(key, value);
         }
     }
-    // ATENÇÃO: 'imprimir_visualizacao_cobrancas' será a nova rota no app.py
     window.open("{{ url_for('imprimir_visualizacao_cobrancas') }}?" + cleanParams.toString(), '_blank');
 }
 </script>
@@ -197,12 +193,47 @@ function visualizarImpressaoCobrancas() {
 <style>
     .form-control-sm { padding: 0.3rem 0.6rem; font-size: 0.875rem; height: calc(1.5em + .3rem + 2px); }
     .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; line-height: 1.5; }
-    .col-actions { width: 100px; white-space: nowrap; }
-    .cell-actions .btn { margin: 0 2px; }
+
+    /* --- Início dos Estilos para Melhorar a Escala da Tabela --- */
+
+    /* Garante que a tabela use layout automático para melhor ajuste de colunas ao conteúdo */
+    .table {
+        table-layout: 30rem; /* Permite que o navegador ajuste as larguras das colunas */
+    }
+
+    /* Estilos gerais para células da tabela para permitir quebra de texto */
+    .table th,
+    .table td {
+        overflow-wrap: break-word; /* Quebra palavras longas para evitar estouro */
+        word-break: break-word;    /* Alternativa para quebra de palavras */
+        /* Opcional: reduzir padding horizontal para ganhar mais espaço */
+        /* padding-left: 0.5rem; */
+        /* padding-right: 0.5rem; */
+    }
+
+    /* Coluna de ações: largura base, permite quebra de conteúdo interno */
+    .col-actions {
+        width: 100px;
+        white-space: normal; /* Permite quebra de linha, se houver múltiplos botões ou texto longo */
+    }
+    .cell-actions .btn { margin: 2px; display: inline-block; } /* Pequeno ajuste para botões se quebrarem linha */
+
+    /* Colunas de Data: permite quebra de linha (sobrescreve nowrap de style.css) */
+    .col-date, .cell-date {
+        white-space: normal !important;
+    }
+
+    /* --- Fim dos Estilos para Melhorar a Escala da Tabela --- */
+
     .fa-xs { font-size: 0.70em; margin-left: 3px; opacity: 0.7; }
+
     .card-body.table-responsive-container { padding: 0; }
     .card-body.table-responsive-container .table-responsive { margin-bottom: 0; border: none; border-radius: 0;}
     .card-body.table-responsive-container .table { margin-bottom: 0; }
     .card > .table-responsive { border-top-left-radius: 0; border-top-right-radius: 0;}
+
+    /* Adiciona um pequeno padding à direita do container responsivo para evitar que a scrollbar cubra o conteúdo */
+    /* .table-responsive { padding-right: 5px; } */ /* Descomente se a barra de rolagem estiver cobrindo a última parte */
+
 </style>
 {% endblock %}
