@@ -15,10 +15,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # --- Funções de Normalização e Auxiliares ---
-# (Manter as funções normalize_column_name_generic, get_col_name_from_df, 
-# format_date_for_db, format_date_for_query, categorizar_status_cobranca, 
-# categorizar_conformidade como estavam)
-
 def normalize_column_name_generic(col_name, prefix="col_desconhecida"):
     if pd.isna(col_name) or col_name is None:
         return f"{prefix}_{str(abs(hash(str(datetime.now()))))}"
@@ -86,7 +82,7 @@ def format_date_for_query(date_string_or_dt):
             dt_obj = datetime.strptime(date_string_or_dt, '%Y-%m-%d') 
             return dt_obj.strftime('%Y-%m-%d')
         except ValueError:
-            logger.debug(f"Não foi possível converter a string de data do filtro '{date_string_or_dt}' para o formato YYYY-MM-DD.")
+            logger.debug(f"Não foi possível converter a string de data do filtro '{date_string_or_dt}' para o formatoYYYY-MM-DD.")
             return None
     return None
 
@@ -124,11 +120,9 @@ def categorizar_conformidade(conformidade_original):
 
 
 # --- Funções de Processamento de Excel/CSV ---
-# (Manter processar_excel_cobrancas e processar_excel_pendentes como estavam)
 def processar_excel_cobrancas(file_path, file_extension, db_name):
     logger.info(f"Processando cobranças (esquema antigo): {file_path} para DB: {db_name}")
     conn = None
-    # ... (código existente) ...
     try:
         df_cobrancas = None
         if file_extension == '.xlsx':
@@ -241,7 +235,6 @@ def processar_excel_cobrancas(file_path, file_extension, db_name):
 def processar_excel_pendentes(file_path, file_extension, db_name):
     logger.info(f"Processando pendências (com UPSERT e normalização de pedido_ref): {file_path} para DB: {db_name}")
     conn = None
-    # ... (código existente) ...
     try:
         df_pendentes = None
         if file_extension == '.xlsx':
@@ -631,11 +624,8 @@ def _build_date_filter_sql(date_column, data_de, data_ate):
 
 
 # --- Funções para Dashboard e KPIs ---
-# (Manter as funções get_count_pedidos_status_especifico, get_placas_status_especifico, etc., como estavam)
-# ... (todo o restante das funções de KPI, CRUD, etc., permanecem iguais) ...
 def get_count_pedidos_status_especifico(status_desejado, db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
-    # ... (código existente) ...
     conditions = [f"LOWER(status) = LOWER(?)"]
     params = [status_desejado.lower()]
 
@@ -665,7 +655,6 @@ def get_count_pedidos_status_especifico(status_desejado, db_name, data_de=None, 
 
 def get_placas_status_especifico(status_desejado, db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
-    # ... (código existente) ...
     date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
     conditions = [f"LOWER(status) = LOWER(?)", "placa IS NOT NULL", "TRIM(placa) != ''"]
     final_params = [status_desejado.lower()]
@@ -695,7 +684,6 @@ def get_count_total_pedidos_lancados(db_name, data_de=None, data_ate=None, filia
 
 def get_count_pedidos_nao_conforme(db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
-    # ... (código existente) ...
     date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
     
     conditions = [f"LOWER(TRIM(conformidade)) = LOWER(?)"]
@@ -724,7 +712,6 @@ def get_count_pedidos_nao_conforme(db_name, data_de=None, data_ate=None, filial_
 
 def get_pedidos_status_por_filial(status_desejado, db_name, data_de=None, data_ate=None):
     conn = None
-    # ... (código existente) ...
     date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
     conditions = [f"LOWER(status) = LOWER(?)", "filial IS NOT NULL", "TRIM(filial) != ''"]
     final_params = [status_desejado.lower()]
@@ -736,7 +723,7 @@ def get_pedidos_status_por_filial(status_desejado, db_name, data_de=None, data_a
         conn = sqlite3.connect(db_name)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        query = f"SELECT filial, COUNT(DISTINCT pedido) as count_pedidos FROM cobrancas {where_clause} GROUP BY filial ORDER BY count_pedidos DESC, filial ASC"
+        query = f"SELECT filial, COUNT(DISTINCT pedido) as count_pedidos FROM cobrancas {where_clause} GROUP BY filial ORDER BY count_pedidos DESC, filial ASC" 
         cursor.execute(query, tuple(final_params))
         return cursor.fetchall()
     except sqlite3.Error as e: 
@@ -747,7 +734,6 @@ def get_pedidos_status_por_filial(status_desejado, db_name, data_de=None, data_a
 
 def get_count_os_status_especifico(status_desejado, db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
-    # ... (código existente) ...
     date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
     conditions = [f"LOWER(status) = LOWER(?)", "os IS NOT NULL AND TRIM(os) != ''"] 
     conditions.append("LOWER(TRIM(os)) NOT IN ('abastecimento', 'estoque', 'outros')") 
@@ -778,7 +764,6 @@ def get_count_total_os_lancadas(db_name, data_de=None, data_ate=None, filial_fil
 
 def get_count_os_para_verificar(db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
-    # ... (código existente) ...
     date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
     conditions = [f"LOWER(TRIM(conformidade)) = LOWER(?)", "os IS NOT NULL AND TRIM(os) != ''"]
     conditions.append("LOWER(TRIM(os)) NOT IN ('abastecimento', 'estoque', 'outros')")
@@ -806,7 +791,6 @@ def get_count_os_para_verificar(db_name, data_de=None, data_ate=None, filial_fil
 
 def get_os_status_por_filial(status_desejado, db_name, data_de=None, data_ate=None):
     conn = None
-    # ... (código existente) ...
     date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
     conditions = [f"LOWER(status) = LOWER(?)", "filial IS NOT NULL", "TRIM(filial) != ''", "os IS NOT NULL AND TRIM(os) != ''"]
     conditions.append("LOWER(TRIM(os)) NOT IN ('abastecimento', 'estoque', 'outros')")
@@ -830,7 +814,6 @@ def get_os_status_por_filial(status_desejado, db_name, data_de=None, data_ate=No
 
 def get_os_com_status_especifico(status_desejado, db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
-    # ... (código existente) ...
     date_filter_sql_part, date_params = _build_date_filter_sql("data_emissao_pedido", data_de, data_ate)
     conditions = [f"LOWER(status) = LOWER(?)", "os IS NOT NULL", "TRIM(os) != ''"]
     conditions.append("LOWER(TRIM(os)) NOT IN ('abastecimento', 'estoque', 'outros')")
@@ -846,9 +829,28 @@ def get_os_com_status_especifico(status_desejado, db_name, data_de=None, data_at
         conn = sqlite3.connect(db_name)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        query = f"SELECT DISTINCT os FROM cobrancas {where_clause} ORDER BY os ASC"
+        # Modificação aqui: Incluir o ID e o pedido na seleção para que eles possam ser validados
+        query = f"SELECT id, os, pedido, filial FROM cobrancas {where_clause} ORDER BY os ASC"
         cursor.execute(query, tuple(final_params))
-        return cursor.fetchall() 
+        
+        # FILTRO APRIMORADO PARA GARANTIR IDs NUMÉRICOS VÁLIDOS E LOGAR PROBLEMAS
+        valid_os_items = []
+        for row in cursor.fetchall():
+            os_id_from_db = row['id']
+            # Verifica se o ID é None ou uma string vazia (após remover espaços)
+            if os_id_from_db is None or (isinstance(os_id_from_db, str) and os_id_from_db.strip() == ''):
+                logger.warning(f"OS com ID NULO/VAZIO no banco de dados e ignorada para listagem: OS='{row.get('os', 'N/A')}', Pedido='{row.get('pedido', 'N/A')}'")
+                continue # Pula para o próximo item
+            try:
+                # Tenta converter para int. Isso capturará strings não numéricas também.
+                valid_id = int(os_id_from_db)
+                valid_os_items.append(row)
+            except (ValueError, TypeError):
+                # Loga se um ID não é um número válido (ex: "ABC")
+                logger.warning(f"OS com ID não numérico encontrada no banco de dados e ignorada para listagem: OS='{row.get('os', 'N/A')}', ID='{os_id_from_db}'")
+                continue
+        
+        return valid_os_items # Retorna apenas os itens com IDs válidos
     except sqlite3.Error as e: 
         logger.error(f"Erro SQL buscar OS com status '{status_desejado}': {e}")
         return []
@@ -857,7 +859,6 @@ def get_os_com_status_especifico(status_desejado, db_name, data_de=None, data_at
 
 def get_kpi_taxa_cobranca_efetuada(db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
-    # ... (código existente) ...
     base_params_total = []
     conditions_total = []
     
@@ -898,7 +899,6 @@ def get_kpi_taxa_cobranca_efetuada(db_name, data_de=None, data_ate=None, filial_
 
 def get_kpi_percentual_nao_conforme(db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
-    # ... (código existente) ...
     base_params_total = []
     conditions_total = []
 
@@ -939,7 +939,6 @@ def get_kpi_percentual_nao_conforme(db_name, data_de=None, data_ate=None, filial
 
 def get_kpi_valor_total_pendencias_ativas(db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
-    # ... (código existente) ...
     conditions = ["LOWER(TRIM(status)) = LOWER(?)"]
     params = ['pendente']
 
@@ -969,7 +968,6 @@ def get_kpi_valor_total_pendencias_ativas(db_name, data_de=None, data_ate=None, 
 
 def get_kpi_tempo_medio_resolucao_pendencias(db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
-    # ... (código existente) ...
     conditions = [
         "LOWER(TRIM(status)) = LOWER('finalizado')",
         "data_emissao IS NOT NULL AND data_emissao != ''",
@@ -1010,7 +1008,6 @@ def get_kpi_tempo_medio_resolucao_pendencias(db_name, data_de=None, data_ate=Non
 
 def get_kpi_valor_investido_por_categoria(db_name, categoria_os, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
-    # ... (código existente) ...
     conditions = [
         "LOWER(TRIM(c.os)) = LOWER(?)", 
         "LOWER(TRIM(p.status)) = LOWER('finalizado')" 
@@ -1064,7 +1061,6 @@ def get_kpi_valor_investido_outros(db_name, data_de=None, data_ate=None, filial_
 
 def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=None, granularidade='mes', filial_filtro=None):
     conn = None
-    # ... (código existente) ...
     try:
         conn = sqlite3.connect(db_name)
         conn.row_factory = sqlite3.Row
@@ -1177,7 +1173,6 @@ def get_evolucao_mensal_cobrancas_pendencias(db_name, data_de=None, data_ate=Non
 
 def get_distribuicao_status_cobranca(db_name, data_de=None, data_ate=None, filial_filtro=None):
     conn = None
-    # ... (código existente) ...
     conditions = [] 
     params = []
 
@@ -1208,10 +1203,6 @@ def get_distribuicao_status_cobranca(db_name, data_de=None, data_ate=None, filia
         if conn: conn.close()
 
 # --- CRUDs ---
-# (Manter get_cobranca_by_id, update_cobranca_db, delete_cobranca_db, 
-# get_pendencia_by_id, update_pendencia_db, delete_pendencia_db, 
-# add_or_update_cobranca_manual como estavam)
-
 def get_cobranca_by_id(cobranca_id, db_name):
     conn = None
     try:
@@ -1248,13 +1239,10 @@ def update_cobranca_db(cobranca_id, data, db_name):
         elif not data_emissao_pedido_val: 
              data_emissao_pedido_val = None
         
-        cursor.execute("""UPDATE cobrancas SET 
-                          pedido = ?, os = ?, filial = ?, placa = ?, transportadora = ?, 
-                          conformidade = ?, status = ?, 
-                          data_emissao_pedido = ?, data_importacao = ? 
-                          WHERE id = ?""",
-                       (pedido_form, os_form, 
-                        str(data.get('filial','')).strip(), 
+        cursor.execute("""UPDATE cobrancas SET filial=?, placa=?, transportadora=?, conformidade=?, status=?, 
+                          data_emissao_pedido=?, data_importacao=? 
+                          WHERE id=? """,
+                       (str(data.get('filial','')).strip(), 
                         str(data.get('placa','')).strip().upper() if data.get('placa') else None, 
                         str(data.get('transportadora','')).strip(), 
                         categorizar_conformidade(data.get('conformidade')), 
@@ -1468,4 +1456,3 @@ def add_or_update_cobranca_manual(data, db_name):
     finally:
         if conn:
             conn.close()
-

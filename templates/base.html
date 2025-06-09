@@ -4,12 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Pólis{% endblock %} - Sistema de Gestão</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" xintegrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css)" xintegrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="preconnect" href="[https://fonts.googleapis.com](https://fonts.googleapis.com)">
+    <link rel="preconnect" href="[https://fonts.gstatic.com](https://fonts.gstatic.com)" crossorigin>
+    <link href="[https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&family=Roboto:wght@400;500;700&display=swap](https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&family=Roboto:wght@400;500;700&display=swap)" rel="stylesheet">
 
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {# DataTables CSS #}
+    <link rel="stylesheet" type="text/css" href="[https://cdn.datatables.net/2.0.8/css/dataTables.dataTables.min.css](https://cdn.datatables.net/2.0.8/css/dataTables.dataTables.min.css)">
     {% block head_extra %}
     <style>
         .sr-only { 
@@ -184,12 +186,13 @@
 
             {# NOVO MENU DROPDOWN: OPERAÇÕES #}
             <div class="nav-item dropdown">
-                 <a href="#" class="nav-item {{ 'active' if request.endpoint in ['integrar_os', 'abastecimento_estoque'] else '' }}" onclick="event.preventDefault(); return false;">
+                 <a href="#" class="nav-item {{ 'active' if request.endpoint in ['integrar_os', 'abastecimento_estoque', 'finalizacao_rapida'] else '' }}" onclick="event.preventDefault(); return false;">
                     <i class="fas fa-cogs"></i> Operações
                 </a>
                 <div class="dropdown-menu">
                     <a class="dropdown-item {{ 'active' if request.endpoint == 'integrar_os' else '' }}" href="{{ url_for('integrar_os') }}"><i class="fas fa-network-wired"></i> Integrar OS</a>
                     <a class="dropdown-item {{ 'active' if request.endpoint == 'abastecimento_estoque' else '' }}" href="{{ url_for('abastecimento_estoque') }}"><i class="fas fa-gas-pump"></i> Abastecimento & Estoque</a>
+                    <a class="dropdown-item {{ 'active' if request.endpoint == 'finalizacao_rapida' else '' }}" href="{{ url_for('finalizacao_rapida') }}"><i class="fas fa-check-double"></i> Finalização Rápida OS</a>
                 </div>
             </div>
             
@@ -233,6 +236,9 @@
         <p>&copy; {{ current_year }} Pólis. Todos os direitos reservados.</p>
     </footer>
 
+    {# DataTables JS (incluir jQuery antes, pois DataTables depende dele) #}
+    <script type="text/javascript" src="[https://code.jquery.com/jquery-3.7.1.min.js](https://code.jquery.com/jquery-3.7.1.min.js)"></script>
+    <script type="text/javascript" src="[https://cdn.datatables.net/2.0.8/js/dataTables.min.js](https://cdn.datatables.net/2.0.8/js/dataTables.min.js)"></script>
     <script>
         (function() {
             const themeSelect = document.getElementById('theme-select');

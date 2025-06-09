@@ -67,7 +67,6 @@ from utils.excel_processor import (
 app = Flask(__name__)
 
 # --- Configurações, Logging, DB Helpers, Flask-Login, Decoradores, Log Auditoria, Filtros Jinja ---
-# (Manter toda a configuração inicial como estava)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', os.urandom(32))
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['DATABASE'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'polis_database.db')
@@ -341,7 +340,7 @@ def indicadores_desempenho():
                 data_de_para_sql = data_de_obj.strftime('%Y-%m-%d')
                 data_de_para_template = data_de_para_sql 
             except ValueError:
-                flash(f"Formato de 'Data De' ({data_de_input}) inválido. Use o seletor ou AAAA-MM-DD.", "warning")
+                flash(f"Formato de 'Data De' ({data_de_input}) inválido. Usar o seletor ou AAAA-MM-DD.", "warning")
                 data_de_para_sql = None
     
     if data_ate_input:
@@ -354,7 +353,7 @@ def indicadores_desempenho():
                 data_ate_para_sql = data_ate_obj.strftime('%Y-%m-%d')
                 data_ate_para_template = data_ate_para_sql
             except ValueError:
-                flash(f"Formato de 'Data Até' ({data_ate_input}) inválido. Use o seletor ou AAAA-MM-DD.", "warning")
+                flash(f"Formato de 'Data Até' ({data_ate_input}) inválido. Usar o seletor ou AAAA-MM-DD.", "warning")
                 data_ate_para_sql = None
 
     granularidade_grafico = 'mes' 
@@ -422,6 +421,95 @@ def indicadores_desempenho():
 
 
 # --- NOVAS ROTAS ---
+@app.route('/finalizacao-rapida', methods=['GET', 'POST'])
+@login_required
+def finalizacao_rapida():
+    db_path = app.config['DATABASE']
+    status_sem_cobranca_label = 'Sem cobrança'
+    status_com_cobranca_label = 'Com cobrança'
+    
+    # Get OS records that are currently 'Sem cobrança'
+    os_sem_cobranca_lista = get_os_com_status_especifico(status_sem_cobranca_label, db_path)
+
+    if request.method == 'POST':
+        os_ids_selecionados = request.form.getlist('os_ids_selecionados')
+        
+        if not os_ids_selecionados:
+            flash("Nenhuma OS selecionada para atualização.", "warning")
+            return redirect(url_for('finalizacao_rapida'))
+
+        sucessos = 0
+        falhas = 0
+        mensagens_detalhadas_falha = []
+
+        for os_id_str in os_ids_selecionados:
+            # Added check: Ensure the string is not empty before attempting conversion
+            if not os_id_str.strip():
+                falhas += 1
+                mensagens_detalhadas_falha.append(f"Um ID de OS vazio ou inválido foi recebido e ignorado.")
+                log_audit("QUICK_FINALIZE_OS_INVALID_ID", "Um ID de OS vazio ou inválido foi recebido.")
+                continue # Skip to the next item
+
+            try:
+                os_id = int(os_id_str)
+                # Fetch the existing record to get all its data
+                cobranca_data = get_cobranca_by_id(os_id, db_path) 
+                
+                if cobranca_data and cobranca_data['status'].lower() == status_sem_cobranca_label.lower():
+                    # 1. Atualizar o status da OS na tabela `cobrancas`
+                    update_data_cobranca = dict(cobranca_data) # Converte para dict para usar .get()
+                    update_data_cobranca['status'] = status_com_cobranca_label 
+                    
+                    success_cobranca, message_cobranca = update_cobranca_db(os_id, update_data_cobranca, db_path) 
+
+                    if success_cobranca:
+                        sucessos += 1
+                        # Acesso a 'pedido' como se fosse um dicionário para usar .get()
+                        pedido_info = cobranca_data['pedido'] if 'pedido' in cobranca_data.keys() else 'N/A'
+                        log_audit("QUICK_FINALIZE_OS_SUCCESS", f"OS ID: {os_id} (Pedido: {pedido_info}) atualizada para 'Com cobrança'.")
+                        # Nenhuma alteração na tabela `pendentes` será feita, conforme solicitado.
+                    else:
+                        falhas += 1
+                        # Acesso a 'pedido' como se fosse um dicionário para usar .get()
+                        pedido_info = cobranca_data['pedido'] if 'pedido' in cobranca_data.keys() else 'N/A'
+                        mensagens_detalhadas_falha.append(f"Falha na OS ID {os_id} (Pedido: {pedido_info}): {message_cobranca}")
+                        log_audit("QUICK_FINALIZE_OS_FAILURE", f"Falha na OS ID {os_id} (Pedido: {pedido_info}): {message_cobranca}")
+                else:
+                    falhas += 1
+                    # Não é preciso acessar 'pedido' se a cobranca_data for None ou status não for 'Sem cobrança'
+                    mensagens_detalhadas_falha.append(f"OS ID {os_id} não encontrada ou já não está 'Sem cobrança'.")
+                    log_audit("QUICK_FINALIZE_OS_SKIP", f"OS ID: {os_id} não elegível para finalização rápida.")
+
+            except ValueError:
+                falhas += 1
+                mensagens_detalhadas_falha.append(f"ID de OS inválido encontrado: '{os_id_str}'.")
+                log_audit("QUICK_FINALIZE_OS_INVALID_ID_CONVERSION", f"ID de OS inválido para conversão: '{os_id_str}'.")
+            except Exception as e:
+                logger.error(f"Erro inesperado ao finalizar rapidamente OS ID {os_id_str}: {e}", exc_info=True)
+                falhas += 1
+                mensagens_detalhadas_falha.append(f"Erro inesperado na OS ID {os_id_str}.")
+
+        if sucessos > 0:
+            flash(f"{sucessos} OS(s) atualizada(s) para '{status_com_cobranca_label}' com sucesso!", "success")
+        if falhas > 0:
+            for msg in mensagens_detalhadas_falha:
+                flash(msg, "warning")
+            if sucessos == 0: 
+                flash("Nenhuma OS foi atualizada com sucesso.", "error")
+
+        # Re-fetch the list for the next render (as some might have been updated)
+        os_sem_cobranca_lista = get_os_com_status_especifico(status_sem_cobranca_label, db_path)
+        
+        return render_template('finalizacao_rapida.html', 
+                               os_sem_cobranca_lista=os_sem_cobranca_lista,
+                               status_sem_cobranca_label=status_sem_cobranca_label,
+                               status_com_cobranca_label=status_com_cobranca_label)
+
+    return render_template('finalizacao_rapida.html', 
+                           os_sem_cobranca_lista=os_sem_cobranca_lista,
+                           status_sem_cobranca_label=status_sem_cobranca_label,
+                           status_com_cobranca_label=status_com_cobranca_label)
+
 @app.route('/integrar-os', methods=['GET', 'POST'])
 @login_required
 def integrar_os():
@@ -539,7 +627,7 @@ def abastecimento_estoque():
                         'status': "Com cobrança", 
                         'conformidade': "Conforme", 
                         'filial': filial_opcional if filial_opcional else pendente_original['filial'],
-                        'data_emissao_herdada': pendente_original['data_emissao']
+                        'data_emissao_herdada': pendente_original['data_emissao'] 
                     }
                     success, message = add_or_update_cobranca_manual(dados_cobranca, app.config['DATABASE'])
                     if success:
@@ -623,8 +711,7 @@ def laboratorio():
 def edit_cobranca(cobranca_id):
     cobranca_db = get_cobranca_by_id(cobranca_id, app.config['DATABASE'])
     if not cobranca_db: 
-        log_audit("EDIT_COBRANCA_NOT_FOUND", f"ID {cobranca_id} não encontrado.")
-        flash("Cobrança não encontrada.", "error")
+        log_audit("EDIT_COBRANCA_NOT_FOUND", f"ID {cobranca_id} não encontrado."); flash("Cobrança não encontrada.", "error")
         return redirect(url_for('relatorio_cobrancas'))
 
     opcoes_status = ["Com cobrança", "Sem cobrança"]
@@ -681,8 +768,7 @@ def delete_cobranca_route(cobranca_id):
 def edit_pendencia(pendencia_id):
     pendencia_db = get_pendencia_by_id(pendencia_id, app.config['DATABASE'])
     if not pendencia_db: 
-        log_audit("EDIT_PENDENCIA_NOT_FOUND", f"ID {pendencia_id} não encontrado.")
-        flash("Pendência não encontrada.", "error")
+        log_audit("EDIT_PENDENCIA_NOT_FOUND", f"ID {pendencia_id} não encontrado."); flash("Pendência não encontrada.", "error")
         return redirect(url_for('relatorio_pendentes'))
 
     form_data = dict(pendencia_db) 
@@ -691,11 +777,11 @@ def edit_pendencia(pendencia_id):
     for date_field_db, date_field_input in [('data_emissao', 'data_emissao_input'), ('data_finalizacao_real', 'data_finalizacao_real_input')]:
         if form_data.get(date_field_db):
             try:
-                # Verifica se a data do DB já está no formato YYYY-MM-DD (pode acontecer após um POST com erro)
+                # Verifica se a data do DB já está no formato %Y-%m-%d (pode acontecer após um POST com erro)
                 datetime.strptime(form_data[date_field_db], '%Y-%m-%d')
                 form_data[date_field_input] = form_data[date_field_db]
             except ValueError:
-                # Se não, tenta converter de YYYY-MM-DD HH:MM:SS
+                # Se não, tenta converter de %Y-%m-%d %H:%M:%S
                 try:
                     dt_obj = datetime.strptime(form_data[date_field_db].split(' ')[0], '%Y-%m-%d %H:%M:%S')
                     form_data[date_field_input] = dt_obj.strftime('%Y-%m-%d')
@@ -745,8 +831,8 @@ def delete_pendencia_route(pendencia_id):
     if not pendencia: log_audit("DELETE_PENDENCIA_NOT_FOUND", f"ID {pendencia_id} não encontrado."); flash("Pendência não encontrada.", "error")
     else:
         if delete_pendencia_db(pendencia_id, app.config['DATABASE']): log_audit("DELETE_PENDENCIA_SUCCESS", f"Pendência ID {pendencia_id} apagada."); flash("Pendência apagada!", "success")
-        else: log_audit("DELETE_PENDENCIA_FAILURE", f"Falha ao apagar ID {pendencia_id}."); flash("Erro ao apagar pendência.", "error")
-    return redirect(url_for('relatorio_pendentes'))
+        else: log_audit("DELETE_PENDENCIA_FAILURE", f"Falha ao apagar ID {pendencia_id}."); flash("Erro ao apagar.", "error")
+    return redirect(url_for('relatorio_pendentes')) 
 
 # --- Relatórios ---
 @app.route('/relatorio-cobrancas') # Rota para o relatório tabular
@@ -902,7 +988,6 @@ def relatorio_cobrancas_kanban():
 
 
 # --- Rota de Visualização do Log de Auditoria (Admin) ---
-# (Manter como estava)
 @app.route('/admin/audit_log')
 @admin_required
 def view_audit_log():
@@ -936,7 +1021,6 @@ def view_audit_log():
     return render_template('admin/view_audit_log.html', logs=logs_processed, current_page=page, total_pages=total_pages, filters=filters_form, total_logs=total_logs)
 
 # --- Rotas de Impressão e Exportação ---
-# (Manter como estavam)
 @app.route('/relatorio-pendentes/imprimir_visualizacao')
 @login_required
 def imprimir_visualizacao_pendentes():

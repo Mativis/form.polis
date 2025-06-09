@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Finalização Rápida de OS</title>
+</head>
+<body>
+    {% extends "base.html" %}
+
+    {% block title %}Finalização Rápida de OS{% endblock %}
+
+    {% block content %}
+    <div class="page-header">
+        <h2 class="page-title"><i class="fas fa-check-double"></i> Finalização Rápida de OS</h2>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fas fa-list-check"></i> OS com Status "{{ status_sem_cobranca_label }}"</h3>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small">
+                Selecione as Ordens de Serviço abaixo para atualizá-las para o status 
+                de "Com cobrança". Apenas OS atualmente com status "{{ status_sem_cobranca_label }}" serão listadas e processadas.
+            </p>
+            
+            <form method="POST" action="{{ url_for('finalizacao_rapida') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                <div class="form-group">
+                    <label>Selecione a(s) OS(s) para Finalizar: <span class="text-danger">*</span></label>
+                    <div class="checkbox-list-container">
+                        {% if os_sem_cobranca_lista %}
+                            {% for os_item in os_sem_cobranca_lista %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" 
+                                       name="os_ids_selecionados" 
+                                       value="{{ os_item.id }}" 
+                                       id="os_id_{{ os_item.id }}">
+                                <label class="form-check-label" for="os_id_{{ os_item.id }}">
+                                    OS: {{ os_item.os | default('N/A') }} 
+                                    <span class="text-muted small">
+                                        (Pedido: {{ os_item.pedido | default('N/A') }}, Filial: {{ os_item.filial | default('N/A') }})
+                                    </span>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-success">
+                                <i class="fas fa-check-circle mr-2"></i>Nenhuma OS com status "{{ status_sem_cobranca_label }}" encontrada no momento.
+                            </p>
+                        {% endif %}
+                    </div>
+                    {% if os_sem_cobranca_lista %}
+                        <small class="text-muted">Marque as caixas das OS desejadas.</small>
+                    {% endif %}
+                </div>
+                
+                <div class="form-group mt-4">
+                    <button type="submit" class="btn btn-primary" {% if not os_sem_cobranca_lista %}disabled{% endif %}>
+                        <i class="fas fa-play"></i> Finalizar OS Selecionadas
+                    </button>
+                    <a href="{{ url_for('home') }}" class="btn btn-secondary">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endblock %}
+
+    {% block head_extra %}
+    {{ super() }}
+    <style>
+        .checkbox-list-container {
+            max-height: 400px; /* Adjust as needed */
+            overflow-y: auto;
+            border: 1px solid var(--input-border-color);
+            padding: 0.75rem;
+            border-radius: var(--border-radius-base);
+            background-color: var(--input-bg);
+            margin-bottom: 0.5rem;
+        }
+        .form-check {
+            display: flex; 
+            align-items: flex-start; /* Align checkbox to top of text */
+            padding: 0.3rem 0.5rem;
+            margin-bottom: 0.25rem;
+            border-radius: var(--border-radius-sm);
+        }
+        .form-check:hover {
+            background-color: var(--table-hover-bg);
+        }
+        .form-check-input {
+            margin-top: 0.25rem; /* Align checkbox with the first line of text */
+            margin-right: 0.75rem;
+            width: 1.1em; 
+            height: 1.1em;
+            cursor: pointer;
+            flex-shrink: 0; /* Prevent checkbox from shrinking */
+        }
+        .form-check-label {
+            font-weight: 400;
+            cursor: pointer;
+            flex-grow: 1; 
+        }
+        .form-check-label .text-muted {
+            font-size: 0.85em;
+        }
+    </style>
+    {% endblock %}
+</body>
+</html>
